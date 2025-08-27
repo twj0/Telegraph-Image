@@ -51,6 +51,9 @@ export async function onRequestPost(context) {
 
         // 将文件信息保存到 KV 存储
         if (env.img_url) {
+            // 从请求中获取文件夹ID（如果有的话）
+            const folderId = formData.get('folderId') || null;
+
             await env.img_url.put(`${fileId}.${fileExtension}`, "", {
                 metadata: {
                     TimeStamp: Date.now(),
@@ -59,6 +62,8 @@ export async function onRequestPost(context) {
                     liked: false,
                     fileName: fileName,
                     fileSize: uploadFile.size,
+                    folderId: folderId,
+                    fileType: getFileTypeFromExtension(fileExtension)
                 }
             });
         }
@@ -131,4 +136,19 @@ async function sendToTelegram(formData, apiEndpoint, env, retryCount = 0) {
         }
         return { success: false, error: 'Network error occurred' };
     }
+}
+
+function getFileTypeFromExtension(extension) {
+    const ext = extension.toLowerCase();
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext)) {
+        return 'image';
+    } else if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'].includes(ext)) {
+        return 'video';
+    } else if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext)) {
+        return 'audio';
+    } else if (['pdf', 'doc', 'docx', 'txt', 'rtf', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) {
+        return 'document';
+    }
+    return 'file';
 }
