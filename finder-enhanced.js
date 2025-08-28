@@ -380,50 +380,44 @@ class MacOSFinder {
 
     async loadFolderStructure() {
         try {
-            // 从localStorage或API加载文件夹结构
+            // 初始化默认结构
+            this.folderStructure = new Map();
+            this.folderStructure.set('root', new Set());
+
+            // 从localStorage加载文件夹结构
             const savedStructure = localStorage.getItem('finder_folder_structure');
             if (savedStructure) {
-                const structure = JSON.parse(savedStructure);
+                try {
+                    const structure = JSON.parse(savedStructure);
+                    console.log('加载的结构数据:', structure);
 
-                // 确保结构是正确的格式
-                if (Array.isArray(structure)) {
-                    // 如果是数组格式，转换为Map
-                    this.folderStructure = new Map(structure);
-                } else if (typeof structure === 'object') {
-                    // 如果是对象格式，转换为Map并确保值是Set
-                    this.folderStructure = new Map();
-                    for (const [key, value] of Object.entries(structure)) {
-                        if (Array.isArray(value)) {
-                            this.folderStructure.set(key, new Set(value));
-                        } else if (value instanceof Set) {
-                            this.folderStructure.set(key, value);
-                        } else {
-                            this.folderStructure.set(key, new Set());
-                        }
-                    }
-                } else {
-                    // 如果格式不正确，初始化为空
-                    this.folderStructure = new Map();
-                }
-
-                // 重建文件夹映射
-                for (const [parentId, children] of this.folderStructure) {
-                    if (children && typeof children[Symbol.iterator] === 'function') {
-                        for (const childId of children) {
-                            if (childId && childId.startsWith('folder_')) {
-                                const folderData = localStorage.getItem(`folder_${childId}`);
-                                if (folderData) {
-                                    try {
-                                        const folder = JSON.parse(folderData);
-                                        folder.isFolder = true;
-                                        this.folders.set(childId, folder);
-                                    } catch (parseError) {
-                                        console.error('解析文件夹数据失败:', childId, parseError);
+                    // 安全地处理不同的数据格式
+                    if (structure && typeof structure === 'object') {
+                        if (Array.isArray(structure)) {
+                            // 如果是数组格式 [[key, value], ...]
+                            for (const item of structure) {
+                                if (Array.isArray(item) && item.length >= 2) {
+                                    const [key, value] = item;
+                                    if (Array.isArray(value)) {
+                                        this.folderStructure.set(key, new Set(value));
+                                    } else {
+                                        this.folderStructure.set(key, new Set());
                                     }
+                                }
+                            }
+                        } else {
+                            // 如果是对象格式 {key: value, ...}
+                            for (const [key, value] of Object.entries(structure)) {
+                                if (Array.isArray(value)) {
+                                    this.folderStructure.set(key, new Set(value));
+                                } else {
+                                    this.folderStructure.set(key, new Set());
                                 }
                             }
                         }
                     }
+                } catch (parseError) {
+                    console.error('解析文件夹结构失败:', parseError);
                 }
             }
 
@@ -432,9 +426,35 @@ class MacOSFinder {
                 this.folderStructure.set('root', new Set());
             }
 
+            // 安全地重建文件夹映射
+            try {
+                for (const [parentId, children] of this.folderStructure) {
+                    if (children && children instanceof Set) {
+                        for (const childId of children) {
+                            if (childId && typeof childId === 'string' && childId.startsWith('folder_')) {
+                                try {
+                                    const folderData = localStorage.getItem(`folder_${childId}`);
+                                    if (folderData) {
+                                        const folder = JSON.parse(folderData);
+                                        folder.isFolder = true;
+                                        this.folders.set(childId, folder);
+                                    }
+                                } catch (folderError) {
+                                    console.error('加载文件夹数据失败:', childId, folderError);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (rebuildError) {
+                console.error('重建文件夹映射失败:', rebuildError);
+            }
+
+            console.log('文件夹结构加载完成:', this.folderStructure);
+
         } catch (error) {
             console.error('加载文件夹结构失败:', error);
-            // 重置为默认结构
+            // 确保有一个安全的默认结构
             this.folderStructure = new Map();
             this.folderStructure.set('root', new Set());
         }
