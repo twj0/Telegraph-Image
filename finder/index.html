@@ -498,7 +498,12 @@
                 `).join('');
 
                 this.bindImageEvents();
-                this.forceImageStyles(); // Force override CSS constraints
+
+                // Force override CSS constraints after DOM update
+                setTimeout(() => {
+                    this.forceImageStyles();
+                }, 100);
+
                 console.log(`✅ 渲染了 ${this.images.length} 张图片`);
             }
 
