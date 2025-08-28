@@ -206,6 +206,279 @@
     <!-- 通知容器 -->
     <div id="notifications" class="notifications"></div>
 
-    <script src="simple-app.js"></script>
+    <script>
+        // 极简版Telegraph图片查看器 - 内联版本
+        class SimpleImageViewer {
+            constructor() {
+                this.images = [];
+                console.log('🚀 Simple Image Viewer 启动...');
+                this.init();
+            }
+
+            async init() {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => this.start());
+                } else {
+                    this.start();
+                }
+            }
+
+            async start() {
+                console.log('📸 开始加载图片...');
+                this.hideLoading();
+                this.bindEvents();
+                await this.loadImages();
+                this.renderImages();
+                console.log('✅ 图片加载完成');
+            }
+
+            hideLoading() {
+                const loadingElement = document.querySelector('.loading-state');
+                if (loadingElement) loadingElement.style.display = 'none';
+
+                const fileArea = document.querySelector('.file-area');
+                if (fileArea) fileArea.style.display = 'block';
+            }
+
+            bindEvents() {
+                const uploadBtn = document.getElementById('uploadBtn');
+                if (uploadBtn) {
+                    uploadBtn.addEventListener('click', () => {
+                        const fileInput = document.getElementById('fileInput');
+                        if (fileInput) fileInput.click();
+                    });
+                }
+
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput) {
+                    fileInput.addEventListener('change', (e) => {
+                        this.handleFileUpload(e.target.files);
+                    });
+                }
+            }
+
+            async loadImages() {
+                console.log('📸 加载图片列表...');
+
+                try {
+                    const response = await fetch('/api/manage/list');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.images = this.filterImages(data);
+                        console.log(`✅ 加载了 ${this.images.length} 张图片`);
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    console.log('🎭 API不可用，使用演示数据');
+                    this.images = this.getDemoImages();
+                }
+            }
+
+            filterImages(files) {
+                if (!Array.isArray(files)) return [];
+
+                return files
+                    .filter(file => this.isImageFile(file.name))
+                    .map(file => ({
+                        id: file.name,
+                        name: file.metadata?.fileName || file.name,
+                        size: file.metadata?.fileSize || 0,
+                        url: `/file/${file.name}`,
+                        uploadDate: new Date(file.metadata?.TimeStamp || Date.now())
+                    }))
+                    .sort((a, b) => b.uploadDate - a.uploadDate);
+            }
+
+            isImageFile(filename) {
+                const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+                const ext = filename.split('.').pop().toLowerCase();
+                return imageExtensions.includes(ext);
+            }
+
+            getDemoImages() {
+                return [
+                    {
+                        id: 'demo_1',
+                        name: '演示图片1.jpg',
+                        size: 1024000,
+                        url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQyODVmNCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuekuuS+i+WbvueJhzE8L3RleHQ+PC9zdmc+',
+                        uploadDate: new Date(Date.now() - 86400000)
+                    },
+                    {
+                        id: 'demo_2',
+                        name: '演示图片2.png',
+                        size: 2048000,
+                        url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzM0Yzc1OSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuekuuS+i+WbvueJhzI8L3RleHQ+PC9zdmc+',
+                        uploadDate: new Date(Date.now() - 172800000)
+                    },
+                    {
+                        id: 'demo_3',
+                        name: '演示图片3.jpg',
+                        size: 1536000,
+                        url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2ZmOTUwMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuekuuS+i+WbvueJhzM8L3RleHQ+PC9zdmc+',
+                        uploadDate: new Date(Date.now() - 259200000)
+                    }
+                ];
+            }
+
+            renderImages() {
+                const fileGrid = document.getElementById('fileGrid');
+                const emptyState = document.getElementById('emptyState');
+
+                if (!fileGrid) {
+                    console.error('❌ 找不到fileGrid元素');
+                    return;
+                }
+
+                if (this.images.length === 0) {
+                    if (emptyState) emptyState.style.display = 'flex';
+                    fileGrid.style.display = 'none';
+                    return;
+                }
+
+                if (emptyState) emptyState.style.display = 'none';
+                fileGrid.style.display = 'grid';
+
+                fileGrid.innerHTML = this.images.map(image => `
+                    <div class="file-item" data-image-id="${image.id}">
+                        <div class="file-icon image">
+                            <img src="${image.url}" alt="${image.name}" loading="lazy"
+                                 style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px;"
+                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjOTk5IiBmb250LXNpemU9IjEyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+5Zu+54mH5Yqg6L295aSx6LSlPC90ZXh0Pjwvc3ZnPg=='">
+                        </div>
+                        <div class="file-name" title="${image.name}">${image.name}</div>
+                        <div class="file-size">${this.formatFileSize(image.size)}</div>
+                    </div>
+                `).join('');
+
+                this.bindImageEvents();
+                console.log(`✅ 渲染了 ${this.images.length} 张图片`);
+            }
+
+            bindImageEvents() {
+                const fileItems = document.querySelectorAll('.file-item');
+                fileItems.forEach(item => {
+                    item.addEventListener('click', () => {
+                        const imageId = item.dataset.imageId;
+                        const image = this.images.find(img => img.id === imageId);
+                        if (image) {
+                            window.open(image.url, '_blank');
+                        }
+                    });
+
+                    item.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        this.showContextMenu(e, item.dataset.imageId);
+                    });
+                });
+            }
+
+            showContextMenu(e, imageId) {
+                const image = this.images.find(img => img.id === imageId);
+                if (!image) return;
+
+                const menu = [
+                    `📋 复制链接: ${window.location.origin}${image.url}`,
+                    `📥 下载图片`,
+                    `🗑️ 删除图片`
+                ];
+
+                const action = prompt('选择操作:\n' + menu.join('\n') + '\n\n输入数字 (1-3):');
+
+                switch(action) {
+                    case '1':
+                        this.copyToClipboard(window.location.origin + image.url);
+                        break;
+                    case '2':
+                        this.downloadImage(image);
+                        break;
+                    case '3':
+                        this.deleteImage(imageId);
+                        break;
+                }
+            }
+
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('链接已复制到剪贴板！');
+                }).catch(() => {
+                    prompt('请手动复制链接:', text);
+                });
+            }
+
+            downloadImage(image) {
+                const a = document.createElement('a');
+                a.href = image.url;
+                a.download = image.name;
+                a.click();
+            }
+
+            async deleteImage(imageId) {
+                if (!confirm('确定要删除这张图片吗？')) return;
+
+                try {
+                    const response = await fetch(`/api/manage/delete/${imageId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        this.images = this.images.filter(img => img.id !== imageId);
+                        this.renderImages();
+                        alert('图片删除成功！');
+                    } else {
+                        alert('删除失败，请重试');
+                    }
+                } catch (error) {
+                    alert('删除失败：' + error.message);
+                }
+            }
+
+            handleFileUpload(files) {
+                if (!files || files.length === 0) return;
+
+                Array.from(files).forEach(file => {
+                    if (this.isImageFile(file.name)) {
+                        this.uploadImage(file);
+                    } else {
+                        alert(`${file.name} 不是支持的图片格式`);
+                    }
+                });
+            }
+
+            async uploadImage(file) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        alert('上传成功！');
+                        await this.loadImages();
+                        this.renderImages();
+                    } else {
+                        alert('上传失败，请重试');
+                    }
+                } catch (error) {
+                    alert('上传失败：' + error.message);
+                }
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        }
+
+        // 启动应用
+        const imageViewer = new SimpleImageViewer();
+    </script>
 </body>
 </html>
