@@ -11,10 +11,40 @@ class MacOSFinder {
     }
 
     init() {
+        // 检查必要的DOM元素
+        if (!this.checkRequiredElements()) {
+            console.error('必要的DOM元素缺失，无法初始化');
+            return;
+        }
+
         this.setupEventListeners();
         this.initializeFolders();
         this.loadFiles();
         this.updateBreadcrumb();
+    }
+
+    checkRequiredElements() {
+        const requiredElements = [
+            'fileGrid',
+            'emptyState',
+            'uploadBtn',
+            'fileInput',
+            'newFolderBtn',
+            'backButton',
+            'breadcrumbPath',
+            'pathInfo',
+            'dropZone',
+            'uploadProgress'
+        ];
+
+        for (const elementId of requiredElements) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.error(`缺少必要元素: ${elementId}`);
+                return false;
+            }
+        }
+        return true;
     }
 
     setupEventListeners() {
@@ -211,26 +241,49 @@ class MacOSFinder {
         try {
             const response = await fetch('/api/manage/list');
             if (response.ok) {
-                const data = await response.json();
-                this.files = data.map(item => ({
-                    id: item.name,
-                    name: item.metadata?.fileName || item.name,
-                    size: item.metadata?.fileSize || 0,
-                    type: this.getFileType(item.name),
-                    url: `/file/${item.name}`,
-                    uploadDate: new Date(item.metadata?.TimeStamp || Date.now()),
-                    parentFolder: item.metadata?.parentFolder || 'root',
-                    favorite: item.metadata?.liked || false,
-                    isFolder: false
-                }));
-                
+                const responseText = await response.text();
+                console.log('API Response:', responseText); // 调试信息
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('JSON解析失败:', parseError);
+                    console.log('响应内容:', responseText);
+                    this.showNotification('服务器响应格式错误', 'error');
+                    return;
+                }
+
+                if (Array.isArray(data)) {
+                    this.files = data.map(item => ({
+                        id: item.name,
+                        name: item.metadata?.fileName || item.name,
+                        size: item.metadata?.fileSize || 0,
+                        type: this.getFileType(item.name),
+                        url: `/file/${item.name}`,
+                        uploadDate: new Date(item.metadata?.TimeStamp || Date.now()),
+                        parentFolder: item.metadata?.parentFolder || 'root',
+                        favorite: item.metadata?.liked || false,
+                        isFolder: false
+                    }));
+                } else {
+                    console.error('API返回的数据不是数组:', data);
+                    this.files = [];
+                }
+
                 // 加载文件夹结构
                 await this.loadFolderStructure();
                 this.renderCurrentView();
+            } else {
+                console.error('API请求失败:', response.status, response.statusText);
+                this.showNotification(`加载文件失败: ${response.status}`, 'error');
             }
         } catch (error) {
             console.error('加载文件失败:', error);
-            this.showNotification('加载文件失败', 'error');
+            this.showNotification('网络错误，无法加载文件', 'error');
+            // 显示空状态而不是崩溃
+            this.files = [];
+            this.renderCurrentView();
         }
     }
 
@@ -416,19 +469,43 @@ class MacOSFinder {
     renderCurrentView() {
         const fileGrid = document.getElementById('fileGrid');
         const emptyState = document.getElementById('emptyState');
+
+        if (!fileGrid || !emptyState) {
+            console.error('必要的DOM元素未找到');
+            return;
+        }
+
         const items = this.getCurrentFolderItems();
 
         if (items.length === 0) {
             fileGrid.style.display = 'none';
             emptyState.style.display = 'flex';
+
+            // 更新空状态消息
+            const emptyTitle = emptyState.querySelector('.empty-title');
+            const emptySubtitle = emptyState.querySelector('.empty-subtitle');
+
+            if (emptyTitle && emptySubtitle) {
+                if (this.files.length === 0) {
+                    emptyTitle.textContent = '暂无文件';
+                    emptySubtitle.textContent = '拖拽文件到此处开始上传';
+                } else {
+                    emptyTitle.textContent = '此文件夹为空';
+                    emptySubtitle.textContent = '拖拽文件到此处或点击上传按钮';
+                }
+            }
         } else {
             fileGrid.style.display = 'grid';
             emptyState.style.display = 'none';
 
-            fileGrid.innerHTML = items.map(item => this.renderItem(item)).join('');
-
-            // 添加事件监听器
-            this.attachItemEventListeners();
+            try {
+                fileGrid.innerHTML = items.map(item => this.renderItem(item)).join('');
+                // 添加事件监听器
+                this.attachItemEventListeners();
+            } catch (error) {
+                console.error('渲染文件项失败:', error);
+                fileGrid.innerHTML = '<div class="error-message">渲染失败，请刷新页面</div>';
+            }
         }
     }
 
