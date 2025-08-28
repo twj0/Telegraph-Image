@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegraph Finder - 文件管理器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 顶部工具栏 -->
+    <header class="toolbar">
+        <div class="toolbar-left">
+            <button id="backBtn" class="btn-icon" title="返回">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <button id="forwardBtn" class="btn-icon" title="前进">
+                <i class="fas fa-arrow-right"></i>
+            </button>
+            <div class="breadcrumb" id="breadcrumb">
+                <span class="breadcrumb-item">全部文件</span>
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <button id="viewModeBtn" class="btn-icon" title="切换视图">
+                <i class="fas fa-th"></i>
+            </button>
+            <button id="uploadBtn" class="btn-primary">
+                <i class="fas fa-upload"></i>
+                上传文件
+            </button>
+            <button id="newFolderBtn" class="btn-secondary">
+                <i class="fas fa-folder-plus"></i>
+                新建文件夹
+            </button>
+        </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="main-content">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>快速访问</h3>
+                <ul class="nav-list">
+                    <li class="nav-item active" data-path="/">
+                        <i class="fas fa-home"></i>
+                        <span>全部文件</span>
+                    </li>
+                    <li class="nav-item" data-path="/recent">
+                        <i class="fas fa-clock"></i>
+                        <span>最近使用</span>
+                    </li>
+                    <li class="nav-item" data-path="/favorites">
+                        <i class="fas fa-star"></i>
+                        <span>收藏夹</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>文件类型</h3>
+                <ul class="nav-list">
+                    <li class="nav-item" data-filter="image">
+                        <i class="fas fa-image"></i>
+                        <span>图片</span>
+                    </li>
+                    <li class="nav-item" data-filter="document">
+                        <i class="fas fa-file-text"></i>
+                        <span>文档</span>
+                    </li>
+                    <li class="nav-item" data-filter="video">
+                        <i class="fas fa-video"></i>
+                        <span>视频</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>我的文件夹</h3>
+                <ul class="nav-list" id="customFolders">
+                    <!-- 动态生成的自定义文件夹 -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- 文件显示区域 -->
+        <section class="file-area">
+            <!-- 加载状态 -->
+            <div id="loadingState" class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+
+            <!-- 空状态 -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-icon">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <h3>文件夹为空</h3>
+                <p>拖拽文件到这里或点击上传按钮添加文件</p>
+                <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-upload"></i>
+                    选择文件
+                </button>
+            </div>
+
+            <!-- 文件网格 -->
+            <div id="fileGrid" class="file-grid" style="display: none;">
+                <!-- 动态生成的文件项 -->
+            </div>
+
+            <!-- 文件列表视图 -->
+            <div id="fileList" class="file-list" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>名称</th>
+                            <th>大小</th>
+                            <th>类型</th>
+                            <th>修改时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileListBody">
+                        <!-- 动态生成的文件行 -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- 隐藏的文件输入 -->
+    <input type="file" id="fileInput" multiple style="display: none;">
+
+    <!-- 上传进度模态框 -->
+    <div id="uploadModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>文件上传</h3>
+                <button class="modal-close" onclick="closeUploadModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="uploadProgress">
+                    <!-- 动态生成的上传进度项 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div id="contextMenu" class="context-menu" style="display: none;">
+        <ul>
+            <li onclick="openFile()">
+                <i class="fas fa-external-link-alt"></i>
+                打开
+            </li>
+            <li onclick="downloadFile()">
+                <i class="fas fa-download"></i>
+                下载
+            </li>
+            <li onclick="copyLink()">
+                <i class="fas fa-link"></i>
+                复制链接
+            </li>
+            <li class="separator"></li>
+            <li onclick="renameFile()">
+                <i class="fas fa-edit"></i>
+                重命名
+            </li>
+            <li onclick="moveToFolder()">
+                <i class="fas fa-folder"></i>
+                移动到文件夹
+            </li>
+            <li class="separator"></li>
+            <li onclick="deleteFile()" class="danger">
+                <i class="fas fa-trash"></i>
+                删除
+            </li>
+        </ul>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notifications" class="notifications"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
