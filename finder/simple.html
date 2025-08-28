@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegraph 图片管理器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f7;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .upload-btn {
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .upload-btn:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        .file-area {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
+            position: relative;
+        }
+
+        .file-area.drag-over {
+            background: linear-gradient(135deg, rgba(0, 122, 255, 0.1) 0%, rgba(0, 122, 255, 0.05) 100%);
+            border: 2px dashed #007aff;
+        }
+
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #666;
+        }
+
+        .loading-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 10px;
+        }
+
+        .file-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .file-item:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-icon {
+            margin-bottom: 12px;
+        }
+
+        .file-icon img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            background: #f0f0f0;
+        }
+
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+            word-break: break-word;
+            font-size: 14px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: #ccc;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+            color: #999;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .stats {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            color: #666;
+        }
+
+        .refresh-btn {
+            background: #34c759;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+            
+            .file-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>📸 Telegraph 图片管理器</h1>
+            <div>
+                <button id="uploadBtn" class="upload-btn">
+                    <i class="fas fa-upload"></i>
+                    上传图片
+                </button>
+                <button id="refreshBtn" class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i>
+                    刷新
+                </button>
+            </div>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="stats">
+            <span id="imageCount">正在加载图片...</span>
+        </div>
+
+        <!-- 文件区域 -->
+        <div class="file-area">
+            <!-- 加载状态 -->
+            <div class="loading-state">
+                <i class="fas fa-spinner"></i>
+                <h3>正在加载图片...</h3>
+                <p>请稍候</p>
+            </div>
+
+            <!-- 空状态 -->
+            <div id="emptyState" class="empty-state">
+                <i class="fas fa-images"></i>
+                <h3>还没有图片</h3>
+                <p>拖拽图片到这里或点击上传按钮开始使用</p>
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click();">
+                    <i class="fas fa-upload"></i>
+                    上传图片
+                </button>
+            </div>
+
+            <!-- 图片网格 -->
+            <div id="fileGrid" class="file-grid" style="display: none;"></div>
+        </div>
+
+        <!-- 隐藏的文件输入 -->
+        <input type="file" id="fileInput" multiple accept="image/*">
+    </div>
+
+    <script src="simple-app.js"></script>
+</body>
+</html>
