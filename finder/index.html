@@ -498,6 +498,7 @@
                 `).join('');
 
                 this.bindImageEvents();
+                this.forceImageStyles(); // Force override CSS constraints
                 console.log(`✅ 渲染了 ${this.images.length} 张图片`);
             }
 
@@ -517,6 +518,44 @@
                         this.showContextMenu(e, item.dataset.imageId);
                     });
                 });
+            }
+
+            // Force override CSS constraints using JavaScript
+            forceImageStyles() {
+                console.log('🎨 强制应用图片样式...');
+
+                const images = document.querySelectorAll('.file-icon.image img');
+                images.forEach((img, index) => {
+                    // Force styles using JavaScript
+                    img.style.setProperty('width', '100%', 'important');
+                    img.style.setProperty('height', '120px', 'important');
+                    img.style.setProperty('max-width', 'none', 'important');
+                    img.style.setProperty('max-height', 'none', 'important');
+                    img.style.setProperty('min-width', '120px', 'important');
+                    img.style.setProperty('min-height', '120px', 'important');
+                    img.style.setProperty('object-fit', 'cover', 'important');
+                    img.style.setProperty('border-radius', '8px', 'important');
+                    img.style.setProperty('display', 'block', 'important');
+
+                    console.log(`✅ 应用样式到图片 ${index + 1}: ${img.clientWidth}x${img.clientHeight}`);
+                });
+
+                // Force parent container styles
+                const containers = document.querySelectorAll('.file-icon.image');
+                containers.forEach((container, index) => {
+                    container.style.setProperty('width', '100%', 'important');
+                    container.style.setProperty('height', '120px', 'important');
+                    container.style.setProperty('display', 'flex', 'important');
+                    container.style.setProperty('align-items', 'center', 'important');
+                    container.style.setProperty('justify-content', 'center', 'important');
+                    container.style.setProperty('overflow', 'hidden', 'important');
+                    container.style.setProperty('border-radius', '8px', 'important');
+                    container.style.setProperty('background', '#f0f0f0', 'important');
+
+                    console.log(`✅ 应用容器样式 ${index + 1}`);
+                });
+
+                console.log('🎨 图片样式强制应用完成');
             }
 
             showContextMenu(e, imageId) {
