@@ -106,16 +106,6 @@ class TelegraphFinder {
             }
         });
 
-        // 右键菜单项点击事件
-        document.addEventListener('click', (e) => {
-            const menuItem = e.target.closest('[data-action]');
-            if (menuItem) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.handleContextMenuAction(menuItem.dataset.action);
-            }
-        });
-
         // 键盘快捷键
         document.addEventListener('keydown', (e) => {
             this.handleKeyboard(e);
@@ -206,11 +196,21 @@ class TelegraphFinder {
         const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
         const items = [];
 
+        console.log('获取当前文件夹内容:', {
+            currentPath: this.currentPath,
+            currentFolderId: currentFolderId,
+            folderStructure: this.folderStructure,
+            folders: Array.from(this.folders.keys())
+        });
+
         // 添加当前文件夹的子文件夹
         const children = this.folderStructure[currentFolderId] || [];
+        console.log('子文件夹ID列表:', children);
+
         for (const childId of children) {
             if (this.folders.has(childId)) {
                 const folder = this.folders.get(childId);
+                console.log('找到文件夹:', folder);
                 if (!folder.isSystem) {
                     items.push({
                         ...folder,
@@ -230,6 +230,7 @@ class TelegraphFinder {
         });
 
         items.push(...files);
+        console.log('当前文件夹总项目数:', items.length, items);
         return items;
     }
 
@@ -642,13 +643,22 @@ class TelegraphFinder {
 
     // 新建文件夹
     createNewFolder() {
+        console.log('开始创建新文件夹');
         const folderName = prompt('请输入文件夹名称:');
         if (!folderName || !folderName.trim()) {
+            console.log('用户取消或输入空名称');
             return;
         }
 
         const folderId = 'folder_' + Date.now();
         const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
+
+        console.log('创建文件夹参数:', {
+            folderName: folderName.trim(),
+            folderId: folderId,
+            currentPath: this.currentPath,
+            currentFolderId: currentFolderId
+        });
 
         const folder = {
             id: folderId,
@@ -662,12 +672,14 @@ class TelegraphFinder {
 
         // 添加到文件夹映射
         this.folders.set(folderId, folder);
+        console.log('文件夹已添加到映射，当前文件夹数:', this.folders.size);
 
         // 更新文件夹结构
         if (!this.folderStructure[currentFolderId]) {
             this.folderStructure[currentFolderId] = [];
         }
         this.folderStructure[currentFolderId].push(folderId);
+        console.log('文件夹结构已更新:', this.folderStructure);
 
         // 保存到本地存储
         this.saveFolderStructure();
@@ -676,6 +688,7 @@ class TelegraphFinder {
         this.createFolderOnServer(folderName.trim(), currentFolderId);
 
         this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
+        console.log('开始重新渲染界面');
         this.render();
     }
 
@@ -790,6 +803,8 @@ class TelegraphFinder {
         const contextMenu = document.getElementById('contextMenu');
         const fileId = item.dataset.fileId;
 
+        console.log('显示右键菜单，文件ID:', fileId);
+
         // 选择当前项
         this.selectFile(item);
 
@@ -810,7 +825,31 @@ class TelegraphFinder {
             contextMenu.style.top = (e.pageY - rect.height) + 'px';
         }
 
-        // 菜单项状态已通过data-action处理，无需更新onclick
+        // 绑定菜单项点击事件
+        this.bindContextMenuEvents();
+    }
+
+    bindContextMenuEvents() {
+        const menuItems = document.querySelectorAll('#contextMenu .menu-item[data-action]');
+        console.log('绑定菜单项事件，找到', menuItems.length, '个菜单项');
+
+        // 移除之前的事件监听器
+        menuItems.forEach(item => {
+            const newItem = item.cloneNode(true);
+            item.parentNode.replaceChild(newItem, item);
+        });
+
+        // 重新获取菜单项并绑定事件
+        const newMenuItems = document.querySelectorAll('#contextMenu .menu-item[data-action]');
+        newMenuItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const action = item.dataset.action;
+                console.log('菜单项点击:', action);
+                this.handleContextMenuAction(action);
+            });
+        });
     }
 
     hideContextMenu() {

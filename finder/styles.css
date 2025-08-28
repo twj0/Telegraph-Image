@@ -489,6 +489,10 @@ body {
 }
 
 .context-menu li {
+    list-style: none;
+}
+
+.context-menu .menu-item {
     padding: 8px 16px;
     cursor: pointer;
     display: flex;
@@ -496,24 +500,30 @@ body {
     gap: 8px;
     font-size: 14px;
     transition: background 0.2s ease;
+    user-select: none;
 }
 
-.context-menu li:hover {
+.context-menu .menu-item:hover {
     background: #f0f0f0;
 }
 
-.context-menu li.separator {
+.context-menu .menu-item i {
+    width: 16px;
+    text-align: center;
+}
+
+.context-menu .separator {
     height: 1px;
     background: #e5e5e7;
     margin: 4px 0;
     padding: 0;
 }
 
-.context-menu li.danger {
+.context-menu .menu-item.danger {
     color: #ff3b30;
 }
 
-.context-menu li.danger:hover {
+.context-menu .menu-item.danger:hover {
     background: #fff5f5;
 }
 
