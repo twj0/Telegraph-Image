@@ -502,6 +502,7 @@
                 // Force override CSS constraints after DOM update
                 setTimeout(() => {
                     this.forceImageStyles();
+                    this.forcePageRerender();
                 }, 100);
 
                 console.log(`✅ 渲染了 ${this.images.length} 张图片`);
@@ -561,6 +562,48 @@
                 });
 
                 console.log('🎨 图片样式强制应用完成');
+            }
+
+            // 强制页面重新渲染 - 解决浏览器渲染问题
+            forcePageRerender() {
+                console.log('🔄 强制页面重新渲染...');
+
+                const fileArea = document.querySelector('.file-area');
+                const fileGrid = document.getElementById('fileGrid');
+
+                if (fileArea && fileGrid) {
+                    // 方法1: 强制重排
+                    fileArea.style.display = 'none';
+                    fileArea.offsetHeight; // 触发重排
+                    fileArea.style.display = 'block';
+
+                    // 方法2: 强制重绘
+                    fileGrid.style.transform = 'translateZ(0)';
+                    fileGrid.style.willChange = 'transform';
+
+                    // 方法3: 添加可见性强制
+                    fileGrid.style.setProperty('visibility', 'visible', 'important');
+                    fileGrid.style.setProperty('opacity', '1', 'important');
+                    fileGrid.style.setProperty('display', 'grid', 'important');
+
+                    // 方法4: 强制重新计算布局
+                    setTimeout(() => {
+                        fileGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(250px, 1fr))';
+                        fileGrid.style.gap = '20px';
+                        fileGrid.style.padding = '20px';
+
+                        // 确保所有图片容器可见
+                        const fileItems = document.querySelectorAll('.file-item');
+                        fileItems.forEach((item, index) => {
+                            item.style.setProperty('display', 'flex', 'important');
+                            item.style.setProperty('visibility', 'visible', 'important');
+                            item.style.setProperty('opacity', '1', 'important');
+                            console.log(`✅ 强制显示文件项 ${index + 1}`);
+                        });
+
+                        console.log('🔄 页面重新渲染完成');
+                    }, 50);
+                }
             }
 
             showContextMenu(e, imageId) {
