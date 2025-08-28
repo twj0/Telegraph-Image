@@ -306,18 +306,33 @@ class MacOSFinder {
 
     async loadFiles() {
         try {
-            const response = await fetch('/api/manage/list');
+            // 添加超时控制
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+
+            const response = await fetch('/api/manage/list', {
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
+            clearTimeout(timeoutId);
+
             if (response.ok) {
                 const responseText = await response.text();
-                console.log('API Response:', responseText); // 调试信息
+                console.log('API Response length:', responseText.length);
 
                 let data;
                 try {
                     data = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('JSON解析失败:', parseError);
-                    console.log('响应内容:', responseText);
+                    console.log('响应内容前200字符:', responseText.substring(0, 200));
                     this.showNotification('服务器响应格式错误', 'error');
+                    this.files = [];
+                    this.renderCurrentView();
                     return;
                 }
 
@@ -333,21 +348,30 @@ class MacOSFinder {
                         favorite: item.metadata?.liked || false,
                         isFolder: false
                     }));
+                    console.log('成功加载', this.files.length, '个文件');
                 } else {
-                    console.error('API返回的数据不是数组:', data);
+                    console.error('API返回的数据不是数组:', typeof data);
                     this.files = [];
                 }
 
                 // 加载文件夹结构
                 await this.loadFolderStructure();
                 this.renderCurrentView();
+
             } else {
                 console.error('API请求失败:', response.status, response.statusText);
                 this.showNotification(`加载文件失败: ${response.status}`, 'error');
+                this.files = [];
+                this.renderCurrentView();
             }
         } catch (error) {
-            console.error('加载文件失败:', error);
-            this.showNotification('网络错误，无法加载文件', 'error');
+            if (error.name === 'AbortError') {
+                console.error('请求超时');
+                this.showNotification('请求超时，请检查网络连接', 'error');
+            } else {
+                console.error('加载文件失败:', error);
+                this.showNotification('网络错误，无法加载文件', 'error');
+            }
             // 显示空状态而不是崩溃
             this.files = [];
             this.renderCurrentView();
@@ -569,6 +593,9 @@ class MacOSFinder {
                 fileGrid.innerHTML = items.map(item => this.renderItem(item)).join('');
                 // 添加事件监听器
                 this.attachItemEventListeners();
+
+                // 优化图片加载
+                this.optimizeImageLoading();
             } catch (error) {
                 console.error('渲染文件项失败:', error);
                 fileGrid.innerHTML = '<div class="error-message">渲染失败，请刷新页面</div>';
@@ -594,7 +621,7 @@ class MacOSFinder {
                 <div class="file-item ${selectedClass}" data-item-id="${item.id}" data-item-type="file" draggable="true">
                     <div class="file-icon ${item.type}">
                         ${item.type === 'image' ?
-                            `<img src="${item.url}" onerror="this.outerHTML='<i class=\\"${this.getFileIcon(item.type)}\\"></i>'">` :
+                            `<img src="${item.url}" alt="${item.name}" loading="lazy" onerror="this.outerHTML='<i class=\\"${this.getFileIcon(item.type)}\\"></i>'">` :
                             `<i class="${this.getFileIcon(item.type)}"></i>`
                         }
                     </div>
@@ -647,6 +674,35 @@ class MacOSFinder {
                     this.handleDrop(e, item.dataset.itemId);
                 }
             });
+        });
+    }
+
+    optimizeImageLoading() {
+        const images = document.querySelectorAll('.file-icon img');
+
+        images.forEach(img => {
+            // 添加加载状态
+            img.addEventListener('loadstart', () => {
+                img.style.opacity = '0.5';
+            });
+
+            // 加载完成
+            img.addEventListener('load', () => {
+                img.style.opacity = '1';
+                img.style.transition = 'opacity 0.3s ease';
+            });
+
+            // 加载失败时的处理
+            img.addEventListener('error', () => {
+                const fileType = img.closest('.file-item').dataset.itemType;
+                const iconClass = this.getFileIcon('image');
+                img.outerHTML = `<i class="${iconClass}" style="color: #34C759; font-size: 24px;"></i>`;
+            });
+
+            // 如果图片已经加载完成（来自缓存）
+            if (img.complete) {
+                img.style.opacity = '1';
+            }
         });
     }
 

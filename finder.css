@@ -15,6 +15,18 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* 字体优化 - 减少Font Awesome警告 */
+.fa, .fas, .far, .fal, .fab {
+    font-display: swap;
+    font-feature-settings: normal;
+}
+
+/* 字体优化 */
+.fa, .fas, .far, .fal, .fab {
+    font-display: swap;
+    font-feature-settings: normal;
+}
+
 .hidden-file-input {
     display: none;
 }
@@ -413,13 +425,39 @@ body {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-/* 图片预览样式 */
+/* 图片预览样式 - 真实文件浏览器效果 */
 .file-icon img {
-    width: 100%;
-    height: 100%;
+    width: 64px;
+    height: 64px;
     object-fit: cover;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 1px 2px rgba(0, 0, 0, 0.24);
+    display: block;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+    transition: all 0.15s ease;
+}
+
+.file-item:hover .file-icon img {
+    box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.15),
+        0 2px 4px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+/* 图片加载状态 */
+.file-icon img[src=""] {
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-icon img[src=""]:before {
+    content: "📷";
+    font-size: 24px;
 }
 
 .file-name {
@@ -1259,5 +1297,26 @@ body {
     .btn {
         width: 100%;
         justify-content: center;
+    }
+
+    /* 移动端文件图标优化 */
+    .file-icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .file-icon img {
+        width: 56px;
+        height: 56px;
+    }
+
+    .file-grid {
+        grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .file-name {
+        font-size: 10px;
     }
 }
