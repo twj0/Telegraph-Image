@@ -5,26 +5,52 @@ class TelegraphFinder {
         this.viewMode = 'grid'; // 'grid' 或 'list'
         this.files = [];
         this.folders = new Map();
+        this.folderStructure = { root: [] };
         this.selectedItems = new Set();
         this.history = ['/'];
         this.historyIndex = 0;
-        
+        this.currentContextFileId = null;
+
         this.init();
     }
 
     async init() {
         console.log('初始化 Telegraph Finder...');
-        
+
+        // 初始化文件夹系统
+        this.initializeFolders();
+
+        // 加载文件夹结构
+        this.loadFolderStructure();
+
         // 设置事件监听器
         this.setupEventListeners();
-        
+
         // 加载初始数据
         await this.loadFiles();
-        
+
         // 渲染界面
         this.render();
-        
+
         console.log('Telegraph Finder 初始化完成');
+    }
+
+    initializeFolders() {
+        // 系统文件夹
+        this.folders.set('all', {
+            id: 'all', name: '全部文件', icon: 'fas fa-home', isSystem: true
+        });
+        this.folders.set('recent', {
+            id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true
+        });
+        this.folders.set('favorites', {
+            id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true
+        });
+        this.folders.set('images', {
+            id: 'images', name: '图片', icon: 'fas fa-image', isSystem: true
+        });
+
+        console.log('文件夹初始化完成，共', this.folders.size, '个系统文件夹');
     }
 
     setupEventListeners() {
@@ -165,42 +191,110 @@ class TelegraphFinder {
     }
 
     getCurrentFiles() {
-        // 根据当前路径过滤文件
-        return this.files.filter(file => {
+        const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
+        const items = [];
+
+        // 添加当前文件夹的子文件夹
+        const children = this.folderStructure[currentFolderId] || [];
+        for (const childId of children) {
+            if (this.folders.has(childId)) {
+                const folder = this.folders.get(childId);
+                if (!folder.isSystem) {
+                    items.push({
+                        ...folder,
+                        type: 'folder',
+                        isFolder: true
+                    });
+                }
+            }
+        }
+
+        // 添加当前文件夹的文件
+        const files = this.files.filter(file => {
             if (this.currentPath === '/') {
-                return file.parentFolder === '/' || !file.parentFolder;
+                return file.parentFolder === '/' || !file.parentFolder || file.parentFolder === 'root';
             }
             return file.parentFolder === this.currentPath;
         });
+
+        items.push(...files);
+        return items;
     }
 
     render() {
         this.updateBreadcrumb();
         this.updateNavigation();
+        this.updateSidebar();
         this.renderFiles();
         this.updateToolbar();
     }
 
+    updateSidebar() {
+        const customFoldersContainer = document.getElementById('customFolders');
+        if (!customFoldersContainer) return;
+
+        // 获取所有自定义文件夹
+        const customFolders = Array.from(this.folders.values())
+            .filter(folder => !folder.isSystem);
+
+        if (customFolders.length === 0) {
+            customFoldersContainer.innerHTML = '<li style="padding: 8px 20px; color: #999; font-size: 12px;">暂无自定义文件夹</li>';
+            return;
+        }
+
+        customFoldersContainer.innerHTML = customFolders.map(folder => `
+            <li class="nav-item" data-path="${folder.id}">
+                <i class="fas fa-folder"></i>
+                <span>${folder.name}</span>
+            </li>
+        `).join('');
+
+        // 添加点击事件
+        customFoldersContainer.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                this.handleNavigation(e.currentTarget);
+            });
+        });
+    }
+
     updateBreadcrumb() {
         const breadcrumb = document.getElementById('breadcrumb');
-        const pathParts = this.currentPath.split('/').filter(part => part);
-        
+
         let html = '<span class="breadcrumb-item" data-path="/">全部文件</span>';
-        
-        let currentPath = '';
-        pathParts.forEach(part => {
-            currentPath += '/' + part;
-            html += `<span class="breadcrumb-item" data-path="${currentPath}">${part}</span>`;
-        });
-        
+
+        // 构建面包屑路径
+        if (this.currentPath !== '/') {
+            const pathParts = this.buildBreadcrumbPath(this.currentPath);
+            pathParts.forEach(part => {
+                html += `<span class="breadcrumb-item" data-path="${part.id}">${part.name}</span>`;
+            });
+        }
+
         breadcrumb.innerHTML = html;
-        
+
         // 添加面包屑点击事件
         breadcrumb.querySelectorAll('.breadcrumb-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.navigateTo(item.dataset.path);
             });
         });
+    }
+
+    buildBreadcrumbPath(folderId) {
+        const path = [];
+        let currentId = folderId;
+
+        while (currentId && currentId !== '/' && currentId !== 'root') {
+            const folder = this.folders.get(currentId);
+            if (folder) {
+                path.unshift({ id: currentId, name: folder.name });
+                currentId = folder.parentFolder;
+            } else {
+                break;
+            }
+        }
+
+        return path;
     }
 
     updateNavigation() {
@@ -243,15 +337,18 @@ class TelegraphFinder {
         }
     }
 
-    renderGridView(files) {
+    renderGridView(items) {
         const fileGrid = document.getElementById('fileGrid');
-        
-        fileGrid.innerHTML = files.map(file => `
-            <div class="file-item" data-file-id="${file.id}" data-file-type="${file.type}">
-                <div class="file-icon ${file.type}">
-                    ${this.getFileIcon(file)}
+
+        fileGrid.innerHTML = items.map(item => `
+            <div class="file-item ${item.isFolder ? 'folder' : ''}"
+                 data-file-id="${item.id}"
+                 data-file-type="${item.type}"
+                 data-is-folder="${item.isFolder || false}">
+                <div class="file-icon ${item.type}">
+                    ${this.getFileIcon(item)}
                 </div>
-                <div class="file-name" title="${file.name}">${file.name}</div>
+                <div class="file-name" title="${item.name}">${item.name}</div>
             </div>
         `).join('');
 
@@ -260,11 +357,21 @@ class TelegraphFinder {
             item.addEventListener('click', (e) => {
                 this.selectFile(item, e.ctrlKey || e.metaKey);
             });
-            
+
             item.addEventListener('dblclick', () => {
-                this.openFile(item.dataset.fileId);
+                const isFolder = item.dataset.isFolder === 'true';
+                if (isFolder) {
+                    this.openFolder(item.dataset.fileId);
+                } else {
+                    this.openFile(item.dataset.fileId);
+                }
             });
         });
+    }
+
+    openFolder(folderId) {
+        console.log('打开文件夹:', folderId);
+        this.navigateTo(folderId);
     }
 
     renderListView(files) {
@@ -529,18 +636,97 @@ class TelegraphFinder {
         }
 
         const folderId = 'folder_' + Date.now();
+        const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
+
         const folder = {
             id: folderId,
             name: folderName.trim(),
+            isFolder: true,
             type: 'folder',
-            parentFolder: this.currentPath,
+            parentFolder: currentFolderId,
             createdAt: new Date(),
             size: 0
         };
 
+        // 添加到文件夹映射
         this.folders.set(folderId, folder);
+
+        // 更新文件夹结构
+        if (!this.folderStructure[currentFolderId]) {
+            this.folderStructure[currentFolderId] = [];
+        }
+        this.folderStructure[currentFolderId].push(folderId);
+
+        // 保存到本地存储
+        this.saveFolderStructure();
+
+        // 发送到服务器
+        this.createFolderOnServer(folderName.trim(), currentFolderId);
+
         this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
         this.render();
+    }
+
+    async createFolderOnServer(name, parentFolder) {
+        try {
+            const response = await fetch('/api/folders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, parentFolder })
+            });
+
+            if (!response.ok) {
+                console.log('服务器创建文件夹失败，仅本地创建');
+            }
+        } catch (error) {
+            console.log('服务器不可用，仅本地创建');
+        }
+    }
+
+    saveFolderStructure() {
+        try {
+            // 保存文件夹结构
+            localStorage.setItem('finder_folder_structure', JSON.stringify(this.folderStructure));
+
+            // 保存每个文件夹的详细信息
+            for (const [folderId, folder] of this.folders) {
+                if (!folder.isSystem) {
+                    localStorage.setItem(`folder_${folderId}`, JSON.stringify(folder));
+                }
+            }
+        } catch (error) {
+            console.error('保存文件夹结构失败:', error);
+        }
+    }
+
+    loadFolderStructure() {
+        try {
+            // 从localStorage加载文件夹结构
+            const savedStructure = localStorage.getItem('finder_folder_structure');
+            if (savedStructure) {
+                this.folderStructure = JSON.parse(savedStructure);
+            }
+
+            // 加载每个文件夹的详细信息
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('folder_')) {
+                    try {
+                        const folderData = localStorage.getItem(key);
+                        const folder = JSON.parse(folderData);
+                        folder.isFolder = true;
+                        this.folders.set(folder.id, folder);
+                    } catch (error) {
+                        console.error('加载文件夹失败:', key, error);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('加载文件夹结构失败:', error);
+            this.folderStructure = { root: [] };
+        }
     }
 
     // 文件选择
@@ -595,6 +781,9 @@ class TelegraphFinder {
         // 选择当前项
         this.selectFile(item);
 
+        // 存储当前操作的文件ID
+        this.currentContextFileId = fileId;
+
         // 显示菜单
         contextMenu.style.display = 'block';
         contextMenu.style.left = e.pageX + 'px';
@@ -608,6 +797,27 @@ class TelegraphFinder {
         if (rect.bottom > window.innerHeight) {
             contextMenu.style.top = (e.pageY - rect.height) + 'px';
         }
+
+        // 更新菜单项状态
+        this.updateContextMenuItems(fileId);
+    }
+
+    updateContextMenuItems(fileId) {
+        const file = this.files.find(f => f.id === fileId);
+        if (!file) return;
+
+        // 根据文件类型更新菜单项
+        const contextMenu = document.getElementById('contextMenu');
+        const menuItems = contextMenu.querySelectorAll('li');
+
+        menuItems.forEach(item => {
+            const action = item.getAttribute('onclick');
+            if (action) {
+                // 更新onclick属性，传入正确的文件ID
+                const newAction = action.replace(/\(\)/g, `('${fileId}')`);
+                item.setAttribute('onclick', newAction);
+            }
+        });
     }
 
     hideContextMenu() {
@@ -674,6 +884,47 @@ class TelegraphFinder {
         }
     }
 
+    // 复制文件链接
+    copyFileLink(fileId) {
+        const file = this.files.find(f => f.id === fileId);
+        if (!file) return;
+
+        const link = window.location.origin + file.url;
+
+        // 尝试使用现代API复制
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(link).then(() => {
+                this.showNotification('链接已复制到剪贴板', 'success');
+            }).catch(() => {
+                this.fallbackCopyText(link);
+            });
+        } else {
+            this.fallbackCopyText(link);
+        }
+    }
+
+    fallbackCopyText(text) {
+        // 降级方案：创建临时文本框
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            this.showNotification('链接已复制到剪贴板', 'success');
+        } catch (err) {
+            this.showNotification('复制失败，请手动复制链接', 'error');
+            console.error('复制失败:', err);
+        }
+
+        document.body.removeChild(textArea);
+    }
+
     // 重命名文件
     renameFile(fileId) {
         const file = this.files.find(f => f.id === fileId);
@@ -681,8 +932,160 @@ class TelegraphFinder {
 
         const newName = prompt('请输入新的文件名:', file.name);
         if (newName && newName.trim() && newName !== file.name) {
-            console.log('重命名文件:', file.name, '->', newName);
+            // 更新本地文件名
+            file.name = newName.trim();
+
+            // 如果有后端API，发送重命名请求
+            this.renameFileOnServer(fileId, newName.trim());
+
+            // 重新渲染
+            this.renderFiles();
             this.showNotification(`文件已重命名为 "${newName}"`, 'success');
+        }
+    }
+
+    async renameFileOnServer(fileId, newName) {
+        try {
+            const response = await fetch(`/api/file/${fileId}/rename`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ newName })
+            });
+
+            if (!response.ok) {
+                console.log('服务器重命名失败，仅本地更新');
+            }
+        } catch (error) {
+            console.log('服务器不可用，仅本地更新');
+        }
+    }
+
+    // 移动文件到文件夹
+    moveFileToFolder(fileId) {
+        const file = this.files.find(f => f.id === fileId);
+        if (!file) return;
+
+        // 获取所有可用文件夹
+        const availableFolders = Array.from(this.folders.values())
+            .filter(folder => !folder.isSystem);
+
+        if (availableFolders.length === 0) {
+            this.showNotification('没有可用的文件夹，请先创建文件夹', 'warning');
+            return;
+        }
+
+        // 创建文件夹选择对话框
+        this.showFolderSelectionDialog(fileId, availableFolders);
+    }
+
+    showFolderSelectionDialog(fileId, folders) {
+        const dialog = document.createElement('div');
+        dialog.className = 'modal';
+        dialog.style.display = 'flex';
+
+        dialog.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>选择目标文件夹</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">目标文件夹:</label>
+                        <select id="folderSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="/">根目录</option>
+                            ${folders.map(folder =>
+                                `<option value="${folder.id}">${folder.name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button onclick="this.closest('.modal').remove()"
+                                style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">
+                            取消
+                        </button>
+                        <button onclick="finder.confirmMoveFile('${fileId}', document.getElementById('folderSelect').value); this.closest('.modal').remove()"
+                                style="padding: 8px 16px; border: none; background: #007aff; color: white; border-radius: 4px; cursor: pointer;">
+                            移动
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+    }
+
+    confirmMoveFile(fileId, targetFolderId) {
+        const file = this.files.find(f => f.id === fileId);
+        if (!file) return;
+
+        const oldFolder = file.parentFolder || '/';
+        file.parentFolder = targetFolderId === '/' ? '/' : targetFolderId;
+
+        // 发送到服务器
+        this.moveFileOnServer(fileId, targetFolderId);
+
+        // 重新渲染
+        this.renderFiles();
+
+        const targetFolderName = targetFolderId === '/' ? '根目录' :
+            this.folders.get(targetFolderId)?.name || '未知文件夹';
+
+        this.showNotification(`文件已移动到 "${targetFolderName}"`, 'success');
+    }
+
+    async moveFileOnServer(fileId, targetFolderId) {
+        try {
+            const response = await fetch(`/api/file/${fileId}/move`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ parentFolder: targetFolderId })
+            });
+
+            if (!response.ok) {
+                console.log('服务器移动失败，仅本地更新');
+            }
+        } catch (error) {
+            console.log('服务器不可用，仅本地更新');
+        }
+    }
+
+    // 删除文件
+    deleteFileById(fileId) {
+        const file = this.files.find(f => f.id === fileId);
+        if (!file) return;
+
+        if (confirm(`确定要删除文件 "${file.name}" 吗？`)) {
+            // 从本地列表中移除
+            this.files = this.files.filter(f => f.id !== fileId);
+
+            // 发送删除请求到服务器
+            this.deleteFileOnServer(fileId);
+
+            // 重新渲染
+            this.renderFiles();
+            this.showNotification(`文件 "${file.name}" 已删除`, 'success');
+        }
+    }
+
+    async deleteFileOnServer(fileId) {
+        try {
+            const response = await fetch(`/api/file/${fileId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                console.log('服务器删除失败，仅本地删除');
+            }
+        } catch (error) {
+            console.log('服务器不可用，仅本地删除');
         }
     }
 }
@@ -700,26 +1103,62 @@ function closeUploadModal() {
     document.getElementById('uploadModal').style.display = 'none';
 }
 
-function openFile() {
-    console.log('打开文件');
+function openFile(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.openFile(fileId);
+    }
+    finder.hideContextMenu();
 }
 
-function downloadFile() {
-    console.log('下载文件');
+function downloadFile(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.downloadFile(fileId);
+    }
+    finder.hideContextMenu();
 }
 
-function copyLink() {
-    console.log('复制链接');
+function copyLink(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.copyFileLink(fileId);
+    }
+    finder.hideContextMenu();
 }
 
-function renameFile() {
-    console.log('重命名文件');
+function renameFile(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.renameFile(fileId);
+    }
+    finder.hideContextMenu();
 }
 
-function moveToFolder() {
-    console.log('移动到文件夹');
+function moveToFolder(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.moveFileToFolder(fileId);
+    }
+    finder.hideContextMenu();
 }
 
-function deleteFile() {
-    console.log('删除文件');
+function deleteFile(fileId) {
+    if (!fileId && finder.currentContextFileId) {
+        fileId = finder.currentContextFileId;
+    }
+    if (fileId) {
+        finder.deleteFileById(fileId);
+    }
+    finder.hideContextMenu();
 }
