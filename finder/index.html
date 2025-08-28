@@ -271,12 +271,60 @@
 
             async start() {
                 console.log('📸 开始加载图片...');
+                console.log('🌐 用户代理:', navigator.userAgent);
+                console.log('🖥️ 屏幕尺寸:', window.innerWidth + 'x' + window.innerHeight);
+
                 this.hideLoading();
                 this.bindEvents();
                 await this.loadImages(true); // 首次加载强制刷新
                 this.renderImages();
                 this.startPeriodicCheck(); // 启动定期检查
+
+                // 添加额外的调试信息
+                this.debugPageState();
+
                 console.log('✅ 图片加载完成');
+            }
+
+            // 调试页面状态
+            debugPageState() {
+                setTimeout(() => {
+                    console.log('🔍 调试页面状态...');
+
+                    const fileArea = document.querySelector('.file-area');
+                    const fileGrid = document.getElementById('fileGrid');
+                    const images = document.querySelectorAll('.file-icon.image img');
+
+                    console.log('📊 页面元素状态:');
+                    console.log('- fileArea存在:', !!fileArea);
+                    console.log('- fileGrid存在:', !!fileGrid);
+                    console.log('- 图片数量:', images.length);
+
+                    if (fileArea) {
+                        const rect = fileArea.getBoundingClientRect();
+                        console.log('- fileArea位置:', rect);
+                        console.log('- fileArea样式:', window.getComputedStyle(fileArea).display);
+                    }
+
+                    if (fileGrid) {
+                        const rect = fileGrid.getBoundingClientRect();
+                        console.log('- fileGrid位置:', rect);
+                        console.log('- fileGrid样式:', window.getComputedStyle(fileGrid).display);
+                        console.log('- fileGrid内容长度:', fileGrid.innerHTML.length);
+                    }
+
+                    images.forEach((img, index) => {
+                        const rect = img.getBoundingClientRect();
+                        console.log(`- 图片${index + 1}:`, {
+                            src: img.src,
+                            size: img.clientWidth + 'x' + img.clientHeight,
+                            position: rect,
+                            visible: rect.width > 0 && rect.height > 0
+                        });
+                    });
+
+                    console.log('🔍 调试完成');
+                }, 1000);
             }
 
             // 启动定期检查机制
