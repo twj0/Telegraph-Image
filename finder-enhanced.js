@@ -384,30 +384,76 @@ class MacOSFinder {
             const savedStructure = localStorage.getItem('finder_folder_structure');
             if (savedStructure) {
                 const structure = JSON.parse(savedStructure);
-                this.folderStructure = new Map(structure);
-                
+
+                // 确保结构是正确的格式
+                if (Array.isArray(structure)) {
+                    // 如果是数组格式，转换为Map
+                    this.folderStructure = new Map(structure);
+                } else if (typeof structure === 'object') {
+                    // 如果是对象格式，转换为Map并确保值是Set
+                    this.folderStructure = new Map();
+                    for (const [key, value] of Object.entries(structure)) {
+                        if (Array.isArray(value)) {
+                            this.folderStructure.set(key, new Set(value));
+                        } else if (value instanceof Set) {
+                            this.folderStructure.set(key, value);
+                        } else {
+                            this.folderStructure.set(key, new Set());
+                        }
+                    }
+                } else {
+                    // 如果格式不正确，初始化为空
+                    this.folderStructure = new Map();
+                }
+
                 // 重建文件夹映射
                 for (const [parentId, children] of this.folderStructure) {
-                    for (const childId of children) {
-                        if (childId.startsWith('folder_')) {
-                            const folderData = localStorage.getItem(`folder_${childId}`);
-                            if (folderData) {
-                                const folder = JSON.parse(folderData);
-                                folder.isFolder = true;
-                                this.folders.set(childId, folder);
+                    if (children && typeof children[Symbol.iterator] === 'function') {
+                        for (const childId of children) {
+                            if (childId && childId.startsWith('folder_')) {
+                                const folderData = localStorage.getItem(`folder_${childId}`);
+                                if (folderData) {
+                                    try {
+                                        const folder = JSON.parse(folderData);
+                                        folder.isFolder = true;
+                                        this.folders.set(childId, folder);
+                                    } catch (parseError) {
+                                        console.error('解析文件夹数据失败:', childId, parseError);
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+
+            // 确保根目录存在
+            if (!this.folderStructure.has('root')) {
+                this.folderStructure.set('root', new Set());
+            }
+
         } catch (error) {
             console.error('加载文件夹结构失败:', error);
+            // 重置为默认结构
+            this.folderStructure = new Map();
+            this.folderStructure.set('root', new Set());
         }
     }
 
     saveFolderStructure() {
         try {
-            localStorage.setItem('finder_folder_structure', JSON.stringify([...this.folderStructure]));
+            // 将Map转换为可序列化的格式
+            const structureToSave = {};
+            for (const [key, value] of this.folderStructure) {
+                if (value instanceof Set) {
+                    structureToSave[key] = Array.from(value);
+                } else if (Array.isArray(value)) {
+                    structureToSave[key] = value;
+                } else {
+                    structureToSave[key] = [];
+                }
+            }
+            localStorage.setItem('finder_folder_structure', JSON.stringify(structureToSave));
         } catch (error) {
             console.error('保存文件夹结构失败:', error);
         }
@@ -520,38 +566,61 @@ class MacOSFinder {
         const currentFolderId = this.getCurrentFolderId();
         const items = [];
 
-        if (currentFolderId === 'root' || this.folders.get(currentFolderId)?.isSystem) {
-            // 系统文件夹或根目录的特殊处理
-            if (currentFolderId === 'all' || currentFolderId === 'root') {
-                // 显示根目录下的所有文件夹和文件
-                const rootChildren = this.folderStructure.get('root') || new Set();
-                for (const childId of rootChildren) {
-                    const folder = this.folders.get(childId);
-                    if (folder && folder.isFolder) {
-                        items.push(folder);
+        try {
+            if (currentFolderId === 'root' || this.folders.get(currentFolderId)?.isSystem) {
+                // 系统文件夹或根目录的特殊处理
+                if (currentFolderId === 'all' || currentFolderId === 'root') {
+                    // 显示根目录下的所有文件夹和文件
+                    const rootChildren = this.folderStructure.get('root');
+                    if (rootChildren && typeof rootChildren[Symbol.iterator] === 'function') {
+                        for (const childId of rootChildren) {
+                            if (childId) {
+                                const folder = this.folders.get(childId);
+                                if (folder && folder.isFolder) {
+                                    items.push(folder);
+                                }
+                            }
+                        }
+                    }
+                    // 添加根目录下的文件
+                    const rootFiles = this.files.filter(file =>
+                        !file.parentFolder || file.parentFolder === 'root'
+                    );
+                    items.push(...rootFiles);
+
+                } else if (currentFolderId === 'recent') {
+                    items.push(...this.files
+                        .sort((a, b) => b.uploadDate - a.uploadDate)
+                        .slice(0, 20));
+                } else if (currentFolderId === 'favorites') {
+                    items.push(...this.files.filter(file => file.favorite));
+                } else if (['images', 'documents', 'videos', 'audio'].includes(currentFolderId)) {
+                    const type = currentFolderId.slice(0, -1);
+                    items.push(...this.files.filter(file => file.type === type));
+                }
+            } else {
+                // 自定义文件夹
+                const children = this.folderStructure.get(currentFolderId);
+                if (children && typeof children[Symbol.iterator] === 'function') {
+                    for (const childId of children) {
+                        if (childId) {
+                            const folder = this.folders.get(childId);
+                            if (folder && folder.isFolder) {
+                                items.push(folder);
+                            }
+                        }
                     }
                 }
-                items.push(...this.files.filter(file => file.parentFolder === 'root'));
-            } else if (currentFolderId === 'recent') {
-                items.push(...this.files
-                    .sort((a, b) => b.uploadDate - a.uploadDate)
-                    .slice(0, 20));
-            } else if (currentFolderId === 'favorites') {
-                items.push(...this.files.filter(file => file.favorite));
-            } else if (['images', 'documents', 'videos', 'audio'].includes(currentFolderId)) {
-                const type = currentFolderId.slice(0, -1);
-                items.push(...this.files.filter(file => file.type === type));
+                // 添加该文件夹下的文件
+                items.push(...this.files.filter(file => file.parentFolder === currentFolderId));
             }
-        } else {
-            // 自定义文件夹
-            const children = this.folderStructure.get(currentFolderId) || new Set();
-            for (const childId of children) {
-                const folder = this.folders.get(childId);
-                if (folder && folder.isFolder) {
-                    items.push(folder);
-                }
-            }
-            items.push(...this.files.filter(file => file.parentFolder === currentFolderId));
+        } catch (error) {
+            console.error('获取文件夹项目时出错:', error);
+            // 如果出错，至少返回当前文件夹下的文件
+            items.push(...this.files.filter(file =>
+                file.parentFolder === currentFolderId ||
+                (!file.parentFolder && currentFolderId === 'root')
+            ));
         }
 
         return items;
@@ -863,8 +932,12 @@ class MacOSFinder {
 
                     // 更新文件夹结构
                     for (const [parentId, children] of this.folderStructure) {
-                        if (children.has(itemId)) {
+                        if (children && typeof children.has === 'function' && children.has(itemId)) {
                             children.delete(itemId);
+                            break;
+                        } else if (Array.isArray(children) && children.includes(itemId)) {
+                            const index = children.indexOf(itemId);
+                            children.splice(index, 1);
                             break;
                         }
                     }
@@ -872,7 +945,14 @@ class MacOSFinder {
                     if (!this.folderStructure.has(targetFolderId)) {
                         this.folderStructure.set(targetFolderId, new Set());
                     }
-                    this.folderStructure.get(targetFolderId).add(itemId);
+                    const targetChildren = this.folderStructure.get(targetFolderId);
+                    if (targetChildren instanceof Set) {
+                        targetChildren.add(itemId);
+                    } else if (Array.isArray(targetChildren)) {
+                        if (!targetChildren.includes(itemId)) {
+                            targetChildren.push(itemId);
+                        }
+                    }
 
                     // 保存文件夹数据
                     localStorage.setItem(`folder_${itemId}`, JSON.stringify(folder));
@@ -1730,5 +1810,5 @@ class MacOSFinder {
 
 // 初始化 macOS Finder
 document.addEventListener('DOMContentLoaded', () => {
-    new MacOSFinder();
+    window.finder = new MacOSFinder();
 });
