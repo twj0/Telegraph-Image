@@ -34,16 +34,19 @@ class MacOSFinderSafe {
         try {
             this.initializeFolders();
             console.log('文件夹初始化完成');
-            
+
+            this.loadFolderStructure();
+            console.log('文件夹结构加载完成');
+
             this.setupBasicEventListeners();
             console.log('基础事件监听器设置完成');
-            
+
             this.updateBreadcrumb();
             console.log('面包屑更新完成');
-            
+
             this.loadFiles();
             console.log('开始加载文件...');
-            
+
         } catch (error) {
             console.error('初始化过程中出错:', error);
             this.showFallbackInterface();
@@ -92,20 +95,52 @@ class MacOSFinderSafe {
 
     initializeFolders() {
         // 系统文件夹
-        this.folders.set('all', { 
+        this.folders.set('all', {
             id: 'all', name: '全部文件', icon: 'fas fa-home', isSystem: true
         });
-        this.folders.set('recent', { 
+        this.folders.set('recent', {
             id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true
         });
-        this.folders.set('favorites', { 
+        this.folders.set('favorites', {
             id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true
         });
-        this.folders.set('images', { 
+        this.folders.set('images', {
             id: 'images', name: '图片', icon: 'fas fa-image', isSystem: true
         });
-        
+
         console.log('文件夹初始化完成，共', this.folders.size, '个系统文件夹');
+    }
+
+    loadFolderStructure() {
+        try {
+            // 从localStorage加载文件夹结构
+            const savedStructure = localStorage.getItem('finder_folder_structure');
+            if (savedStructure) {
+                const structure = JSON.parse(savedStructure);
+                this.folderStructure = structure || { root: [] };
+                console.log('加载的文件夹结构:', this.folderStructure);
+            }
+
+            // 加载每个文件夹的详细信息
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('folder_')) {
+                    try {
+                        const folderData = localStorage.getItem(key);
+                        const folder = JSON.parse(folderData);
+                        folder.isFolder = true;
+                        this.folders.set(folder.id, folder);
+                    } catch (error) {
+                        console.error('加载文件夹失败:', key, error);
+                    }
+                }
+            }
+
+            console.log('文件夹结构加载完成，共', this.folders.size, '个文件夹');
+        } catch (error) {
+            console.error('加载文件夹结构失败:', error);
+            this.folderStructure = { root: [] };
+        }
     }
 
     async loadFiles() {
@@ -201,20 +236,38 @@ class MacOSFinderSafe {
             fileGrid.style.display = 'grid';
             emptyState.style.display = 'none';
             
-            // 简单渲染文件
-            fileGrid.innerHTML = this.files.map(file => `
-                <div class="file-item" data-item-id="${file.id}">
-                    <div class="file-icon ${file.type}">
-                        ${file.type === 'image' ? 
-                            `<img src="${file.url}" alt="${file.name}" loading="lazy" onerror="this.outerHTML='<i class=\\"fas fa-image\\"></i>'">` :
-                            `<i class="fas fa-file"></i>`
-                        }
-                    </div>
-                    <div class="file-name">${file.name}</div>
-                </div>
-            `).join('');
-            
-            console.log('文件渲染完成');
+            // 获取当前文件夹的内容
+            const currentItems = this.getCurrentFolderItems();
+
+            // 渲染文件和文件夹
+            fileGrid.innerHTML = currentItems.map(item => {
+                if (item.isFolder) {
+                    return `
+                        <div class="file-item folder" data-item-id="${item.id}" ondblclick="finder.openFolder('${item.id}')">
+                            <div class="file-icon folder">
+                                <i class="fas fa-folder"></i>
+                            </div>
+                            <div class="file-name">${item.name}</div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="file-item" data-item-id="${item.id}">
+                            <div class="file-icon ${item.type}">
+                                ${item.type === 'image' ?
+                                    `<img src="${item.url}" alt="${item.name}" loading="lazy"
+                                          style="width: 64px; height: 64px; object-fit: cover; border-radius: 6px;"
+                                          onerror="this.outerHTML='<i class=\\"fas fa-image\\"></i>'">` :
+                                    `<i class="fas fa-file"></i>`
+                                }
+                            </div>
+                            <div class="file-name">${item.name}</div>
+                        </div>
+                    `;
+                }
+            }).join('');
+
+            console.log('文件渲染完成，共', currentItems.length, '项');
         }
     }
 
@@ -239,7 +292,7 @@ class MacOSFinderSafe {
         const newFolderBtn = document.getElementById('newFolderBtn');
         if (newFolderBtn) {
             newFolderBtn.addEventListener('click', () => {
-                this.showNotification('新建文件夹功能开发中', 'info');
+                this.createNewFolder();
             });
         }
 
@@ -306,9 +359,94 @@ class MacOSFinderSafe {
         return 'file';
     }
 
+    getCurrentFolderItems() {
+        const currentFolderId = this.currentPath.length > 0 ? this.currentPath[this.currentPath.length - 1] : 'root';
+
+        // 获取当前文件夹的子项
+        const children = this.folderStructure[currentFolderId] || [];
+        const items = [];
+
+        // 添加文件夹
+        for (const childId of children) {
+            if (this.folders.has(childId)) {
+                items.push(this.folders.get(childId));
+            }
+        }
+
+        // 添加文件（只在根目录显示）
+        if (currentFolderId === 'root') {
+            for (const file of this.files) {
+                if (!file.parentFolder || file.parentFolder === 'root') {
+                    items.push(file);
+                }
+            }
+        }
+
+        return items;
+    }
+
+    createNewFolder() {
+        const folderName = prompt('请输入文件夹名称:');
+        if (!folderName || !folderName.trim()) {
+            return;
+        }
+
+        const folderId = 'folder_' + Date.now();
+        const currentFolderId = this.currentPath.length > 0 ? this.currentPath[this.currentPath.length - 1] : 'root';
+
+        // 创建文件夹对象
+        const folder = {
+            id: folderId,
+            name: folderName.trim(),
+            isFolder: true,
+            createdAt: new Date(),
+            parentFolder: currentFolderId
+        };
+
+        // 添加到文件夹映射
+        this.folders.set(folderId, folder);
+
+        // 添加到文件夹结构
+        if (!this.folderStructure[currentFolderId]) {
+            this.folderStructure[currentFolderId] = [];
+        }
+        this.folderStructure[currentFolderId].push(folderId);
+
+        // 保存到本地存储
+        this.saveFolderStructure();
+
+        // 重新渲染
+        this.renderCurrentView();
+
+        this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
+    }
+
+    openFolder(folderId) {
+        console.log('打开文件夹:', folderId);
+        this.currentPath.push(folderId);
+        this.updateBreadcrumb();
+        this.renderCurrentView();
+    }
+
+    saveFolderStructure() {
+        try {
+            // 保存文件夹结构
+            localStorage.setItem('finder_folder_structure', JSON.stringify(this.folderStructure));
+
+            // 保存每个文件夹的详细信息
+            for (const [folderId, folder] of this.folders) {
+                if (!folder.isSystem) {
+                    localStorage.setItem(`folder_${folderId}`, JSON.stringify(folder));
+                }
+            }
+        } catch (error) {
+            console.error('保存文件夹结构失败:', error);
+        }
+    }
+
     showNotification(message, type = 'info') {
         console.log('显示通知:', message, type);
-        
+
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed; top: 20px; right: 20px; padding: 12px 20px;
@@ -316,7 +454,7 @@ class MacOSFinderSafe {
             background: ${type === 'success' ? '#34c759' : type === 'error' ? '#ff3b30' : '#007aff'};
             max-width: 300px; word-wrap: break-word;
         `;
-        
+
         notification.textContent = message;
         document.body.appendChild(notification);
 
