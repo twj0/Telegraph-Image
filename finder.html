@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegraph Cloud Drive | 云端文件管理器</title>
+    <title>Telegraph Finder | 云端文件管理器</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="file-manager.css" rel="stylesheet">
+    <link href="finder.css" rel="stylesheet">
 </head>
 <body>
+    <!-- 移动端头部 -->
+    <div class="mobile-header">
+        <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" title="打开菜单" aria-label="打开侧边栏菜单">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="mobile-title">Telegraph Finder</div>
+        <button type="button" class="btn btn-primary" id="mobileUploadBtn" title="上传文件" aria-label="上传文件">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
 
     <div class="app-container">
-        <!-- 移动端头部 -->
-        <div class="mobile-header">
-            <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" title="打开菜单" aria-label="打开侧边栏菜单">
-                <i class="fas fa-bars"></i>
-            </button>
-            <div class="mobile-title">Telegraph Drive</div>
-            <button type="button" class="btn btn-primary" id="mobileUploadBtn" title="上传文件" aria-label="上传文件">
-                <i class="fas fa-plus"></i>
-            </button>
-        </div>
-
         <!-- 侧边栏遮罩 -->
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -30,7 +29,7 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <i class="fas fa-cloud"></i>
-                    <span>Telegraph Drive</span>
+                    <span>Telegraph Finder</span>
                 </div>
             </div>
             
@@ -73,14 +72,7 @@
                 
                 <div class="nav-section">
                     <div class="nav-section-title">我的文件夹</div>
-                    <a href="#" class="nav-item" data-folder="work">
-                        <i class="fas fa-briefcase"></i>
-                        <span>工作文件</span>
-                    </a>
-                    <a href="#" class="nav-item" data-folder="personal">
-                        <i class="fas fa-user"></i>
-                        <span>个人文件</span>
-                    </a>
+                    <!-- 自定义文件夹将通过JavaScript动态添加 -->
                 </div>
             </nav>
         </div>
@@ -103,9 +95,9 @@
                 <div class="toolbar-right">
                     <div class="search-box">
                         <i class="fas fa-search search-icon"></i>
-                        <input type="text" class="search-input" placeholder="搜索文件和文件夹...">
+                        <input type="text" class="search-input" placeholder="搜索文件和文件夹..." aria-label="搜索文件">
                     </div>
-                    <button type="button" class="btn btn-secondary" id="settingsBtn" title="设置">
+                    <button type="button" class="btn btn-secondary" id="settingsBtn" title="设置" aria-label="设置">
                         <i class="fas fa-cog"></i>
                     </button>
                 </div>
@@ -122,10 +114,10 @@
             <div class="file-view">
                 <div class="view-controls">
                     <div class="view-mode-toggle">
-                        <button type="button" class="view-mode-btn active" data-view="grid" title="网格视图">
+                        <button type="button" class="view-mode-btn active" data-view="grid" title="网格视图" aria-label="网格视图">
                             <i class="fas fa-th"></i>
                         </button>
-                        <button type="button" class="view-mode-btn" data-view="list" title="列表视图">
+                        <button type="button" class="view-mode-btn" data-view="list" title="列表视图" aria-label="列表视图">
                             <i class="fas fa-list"></i>
                         </button>
                     </div>
@@ -143,6 +135,15 @@
                 <!-- 文件网格 -->
                 <div class="file-grid" id="fileGrid">
                     <!-- 文件项将通过JavaScript动态生成 -->
+                </div>
+
+                <!-- 空状态提示 -->
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <div class="empty-title">文件夹为空</div>
+                    <div class="empty-subtitle">拖拽文件到这里开始上传</div>
                 </div>
             </div>
         </div>
@@ -165,8 +166,16 @@
     </div>
 
     <!-- 隐藏的文件输入 -->
-    <input type="file" id="fileInput" multiple class="hidden-file-input">
+    <input type="file" id="fileInput" multiple class="hidden-file-input" aria-label="选择文件上传">
 
-    <script src="file-manager.js"></script>
+    <!-- 返回原版按钮 -->
+    <div class="back-to-original">
+        <a href="/" class="btn btn-secondary" title="返回原版界面">
+            <i class="fas fa-arrow-left"></i>
+            返回原版
+        </a>
+    </div>
+
+    <script src="finder-complete.js"></script>
 </body>
 </html>
