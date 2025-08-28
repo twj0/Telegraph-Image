@@ -153,29 +153,29 @@
     <!-- 右键菜单 -->
     <div id="contextMenu" class="context-menu" style="display: none;">
         <ul>
-            <li onclick="openFile()">
+            <li data-action="open">
                 <i class="fas fa-external-link-alt"></i>
                 打开
             </li>
-            <li onclick="downloadFile()">
+            <li data-action="download">
                 <i class="fas fa-download"></i>
                 下载
             </li>
-            <li onclick="copyLink()">
+            <li data-action="copy">
                 <i class="fas fa-link"></i>
                 复制链接
             </li>
             <li class="separator"></li>
-            <li onclick="renameFile()">
+            <li data-action="rename">
                 <i class="fas fa-edit"></i>
                 重命名
             </li>
-            <li onclick="moveToFolder()">
+            <li data-action="move">
                 <i class="fas fa-folder"></i>
                 移动到文件夹
             </li>
             <li class="separator"></li>
-            <li onclick="deleteFile()" class="danger">
+            <li data-action="delete" class="danger">
                 <i class="fas fa-trash"></i>
                 删除
             </li>

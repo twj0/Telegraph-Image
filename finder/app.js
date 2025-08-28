@@ -100,8 +100,20 @@ class TelegraphFinder {
         });
 
         // 点击其他地方关闭右键菜单
-        document.addEventListener('click', () => {
-            this.hideContextMenu();
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#contextMenu')) {
+                this.hideContextMenu();
+            }
+        });
+
+        // 右键菜单项点击事件
+        document.addEventListener('click', (e) => {
+            const menuItem = e.target.closest('[data-action]');
+            if (menuItem) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleContextMenuAction(menuItem.dataset.action);
+            }
         });
 
         // 键盘快捷键
@@ -798,30 +810,52 @@ class TelegraphFinder {
             contextMenu.style.top = (e.pageY - rect.height) + 'px';
         }
 
-        // 更新菜单项状态
-        this.updateContextMenuItems(fileId);
-    }
-
-    updateContextMenuItems(fileId) {
-        const file = this.files.find(f => f.id === fileId);
-        if (!file) return;
-
-        // 根据文件类型更新菜单项
-        const contextMenu = document.getElementById('contextMenu');
-        const menuItems = contextMenu.querySelectorAll('li');
-
-        menuItems.forEach(item => {
-            const action = item.getAttribute('onclick');
-            if (action) {
-                // 更新onclick属性，传入正确的文件ID
-                const newAction = action.replace(/\(\)/g, `('${fileId}')`);
-                item.setAttribute('onclick', newAction);
-            }
-        });
+        // 菜单项状态已通过data-action处理，无需更新onclick
     }
 
     hideContextMenu() {
         document.getElementById('contextMenu').style.display = 'none';
+        this.currentContextFileId = null;
+    }
+
+    handleContextMenuAction(action) {
+        console.log('右键菜单动作:', action, '文件ID:', this.currentContextFileId);
+
+        if (!this.currentContextFileId) {
+            console.error('没有选中的文件ID');
+            return;
+        }
+
+        switch (action) {
+            case 'open':
+                console.log('执行打开文件');
+                this.openFile(this.currentContextFileId);
+                break;
+            case 'download':
+                console.log('执行下载文件');
+                this.downloadFile(this.currentContextFileId);
+                break;
+            case 'copy':
+                console.log('执行复制链接');
+                this.copyFileLink(this.currentContextFileId);
+                break;
+            case 'rename':
+                console.log('执行重命名文件');
+                this.renameFile(this.currentContextFileId);
+                break;
+            case 'move':
+                console.log('执行移动文件');
+                this.moveFileToFolder(this.currentContextFileId);
+                break;
+            case 'delete':
+                console.log('执行删除文件');
+                this.deleteFileById(this.currentContextFileId);
+                break;
+            default:
+                console.log('未知动作:', action);
+        }
+
+        this.hideContextMenu();
     }
 
     // 侧边栏导航
@@ -1101,64 +1135,4 @@ document.addEventListener('DOMContentLoaded', () => {
 // 全局函数（供HTML调用）
 function closeUploadModal() {
     document.getElementById('uploadModal').style.display = 'none';
-}
-
-function openFile(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.openFile(fileId);
-    }
-    finder.hideContextMenu();
-}
-
-function downloadFile(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.downloadFile(fileId);
-    }
-    finder.hideContextMenu();
-}
-
-function copyLink(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.copyFileLink(fileId);
-    }
-    finder.hideContextMenu();
-}
-
-function renameFile(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.renameFile(fileId);
-    }
-    finder.hideContextMenu();
-}
-
-function moveToFolder(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.moveFileToFolder(fileId);
-    }
-    finder.hideContextMenu();
-}
-
-function deleteFile(fileId) {
-    if (!fileId && finder.currentContextFileId) {
-        fileId = finder.currentContextFileId;
-    }
-    if (fileId) {
-        finder.deleteFileById(fileId);
-    }
-    finder.hideContextMenu();
 }
