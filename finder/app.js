@@ -607,32 +607,41 @@ class TelegraphFinder {
 
         try {
             // 模拟上传进度
-            for (let i = 0; i <= 100; i += 10) {
+            for (let i = 0; i <= 90; i += 10) {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 progressBar.style.width = i + '%';
                 progressText.textContent = i + '%';
             }
 
-            // 尝试真实上传，如果失败则模拟成功
+            // 尝试使用Telegraph的上传API
             try {
                 const formData = new FormData();
                 formData.append('file', file);
 
-                const response = await fetch('/api/upload', {
+                // 如果在文件夹中，添加文件夹ID
+                if (this.currentPath !== '/') {
+                    formData.append('folderId', this.currentPath);
+                }
+
+                const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
                 });
 
                 if (response.ok) {
+                    const result = await response.json();
+                    progressBar.style.width = '100%';
                     progressText.textContent = '完成';
                     progressText.style.color = '#34c759';
                     this.showNotification(`${file.name} 上传成功`, 'success');
+
+                    console.log('✅ 文件上传成功:', result);
                 } else {
                     throw new Error(`上传失败: ${response.status}`);
                 }
             } catch (apiError) {
-                // API不可用时模拟成功
-                console.log('API不可用，模拟上传成功');
+                console.log('🎭 Telegraph API不可用，使用演示模式');
+                progressBar.style.width = '100%';
                 progressText.textContent = '完成 (演示)';
                 progressText.style.color = '#34c759';
                 this.showNotification(`${file.name} 上传成功 (演示模式)`, 'success');
@@ -645,13 +654,13 @@ class TelegraphFinder {
                     type: this.getFileType(file.name),
                     url: URL.createObjectURL(file),
                     uploadDate: new Date(),
-                    parentFolder: this.currentPath,
+                    parentFolder: this.currentPath === '/' ? 'root' : this.currentPath,
                     favorite: false
                 };
                 this.files.unshift(mockFile);
             }
         } catch (error) {
-            console.error('上传文件失败:', error);
+            console.error('❌ 上传文件失败:', error);
             progressBar.style.background = '#ff3b30';
             progressText.textContent = '失败';
             progressText.style.color = '#ff3b30';
@@ -746,13 +755,20 @@ class TelegraphFinder {
 
     loadFolderStructure() {
         try {
+            console.log('🗂️ 开始加载文件夹结构...');
+
             // 从localStorage加载文件夹结构
             const savedStructure = localStorage.getItem('finder_folder_structure');
             if (savedStructure) {
                 this.folderStructure = JSON.parse(savedStructure);
+                console.log('✅ 文件夹结构已加载:', this.folderStructure);
+            } else {
+                console.log('⚠️ 未找到保存的文件夹结构，使用默认结构');
+                this.folderStructure = { root: [] };
             }
 
             // 加载每个文件夹的详细信息
+            let loadedFolders = 0;
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
                 if (key && key.startsWith('folder_')) {
@@ -761,13 +777,19 @@ class TelegraphFinder {
                         const folder = JSON.parse(folderData);
                         folder.isFolder = true;
                         this.folders.set(folder.id, folder);
+                        loadedFolders++;
+                        console.log('📁 加载文件夹:', folder.name, folder.id);
                     } catch (error) {
-                        console.error('加载文件夹失败:', key, error);
+                        console.error('❌ 加载文件夹失败:', key, error);
                     }
                 }
             }
+
+            console.log(`✅ 文件夹加载完成，共加载 ${loadedFolders} 个自定义文件夹`);
+            console.log('📊 当前文件夹映射:', Array.from(this.folders.keys()));
+
         } catch (error) {
-            console.error('加载文件夹结构失败:', error);
+            console.error('❌ 加载文件夹结构失败:', error);
             this.folderStructure = { root: [] };
         }
     }
@@ -1168,15 +1190,18 @@ class TelegraphFinder {
 
     async deleteFileOnServer(fileId) {
         try {
-            const response = await fetch(`/api/file/${fileId}`, {
+            // 使用Telegraph的删除API
+            const response = await fetch(`/api/manage/delete/${fileId}`, {
                 method: 'DELETE'
             });
 
-            if (!response.ok) {
-                console.log('服务器删除失败，仅本地删除');
+            if (response.ok) {
+                console.log('✅ 服务器删除成功');
+            } else {
+                console.log('⚠️ 服务器删除失败，仅本地删除');
             }
         } catch (error) {
-            console.log('服务器不可用，仅本地删除');
+            console.log('🎭 服务器不可用，仅本地删除');
         }
     }
 }
