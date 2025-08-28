@@ -25,6 +25,10 @@
             <button id="viewModeBtn" class="btn-icon" title="切换视图">
                 <i class="fas fa-th"></i>
             </button>
+            <button id="refreshBtn" class="btn-secondary" title="刷新图片列表">
+                <i class="fas fa-sync-alt"></i>
+                刷新
+            </button>
             <button id="uploadBtn" class="btn-primary">
                 <i class="fas fa-upload"></i>
                 上传图片
@@ -227,9 +231,26 @@
                 console.log('📸 开始加载图片...');
                 this.hideLoading();
                 this.bindEvents();
-                await this.loadImages();
+                await this.loadImages(true); // 首次加载强制刷新
                 this.renderImages();
+                this.startPeriodicCheck(); // 启动定期检查
                 console.log('✅ 图片加载完成');
+            }
+
+            // 启动定期检查机制
+            startPeriodicCheck() {
+                // 每30秒检查一次更新
+                setInterval(async () => {
+                    await this.checkForUpdates();
+                }, 30000);
+
+                // 页面获得焦点时也检查更新
+                window.addEventListener('focus', async () => {
+                    console.log('🔍 页面获得焦点，检查更新...');
+                    await this.checkForUpdates();
+                });
+
+                console.log('🔄 已启动定期检查机制');
             }
 
             hideLoading() {
@@ -241,6 +262,7 @@
             }
 
             bindEvents() {
+                // 上传按钮
                 const uploadBtn = document.getElementById('uploadBtn');
                 if (uploadBtn) {
                     uploadBtn.addEventListener('click', () => {
@@ -249,6 +271,26 @@
                     });
                 }
 
+                // 刷新按钮
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', async () => {
+                        console.log('🔄 手动刷新图片列表...');
+                        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 刷新中...';
+                        refreshBtn.disabled = true;
+
+                        try {
+                            await this.loadImages(true);
+                            this.renderImages();
+                            this.showSuccessMessage('图片列表已刷新！');
+                        } finally {
+                            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新';
+                            refreshBtn.disabled = false;
+                        }
+                    });
+                }
+
+                // 文件输入
                 const fileInput = document.getElementById('fileInput');
                 if (fileInput) {
                     fileInput.addEventListener('change', (e) => {
@@ -257,21 +299,72 @@
                 }
             }
 
-            async loadImages() {
-                console.log('📸 加载图片列表...');
+            async loadImages(forceRefresh = false) {
+                console.log('📸 加载图片列表...', forceRefresh ? '(强制刷新)' : '');
 
                 try {
-                    const response = await fetch('/api/manage/list');
+                    // 添加时间戳避免缓存
+                    const timestamp = forceRefresh ? `?t=${Date.now()}` : '';
+                    const response = await fetch(`/api/manage/list${timestamp}`, {
+                        method: 'GET',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+
                     if (response.ok) {
                         const data = await response.json();
                         this.images = this.filterImages(data);
                         console.log(`✅ 加载了 ${this.images.length} 张图片`);
+
+                        // 保存到本地存储，用于跨浏览器同步检测
+                        this.saveImageListToStorage();
                     } else {
                         throw new Error(`HTTP ${response.status}`);
                     }
                 } catch (error) {
                     console.log('🎭 API不可用，使用演示数据');
                     this.images = this.getDemoImages();
+                }
+            }
+
+            // 保存图片列表到本地存储
+            saveImageListToStorage() {
+                try {
+                    const imageList = this.images.map(img => ({
+                        id: img.id,
+                        name: img.name,
+                        size: img.size,
+                        uploadDate: img.uploadDate
+                    }));
+                    localStorage.setItem('telegraph_image_list', JSON.stringify({
+                        timestamp: Date.now(),
+                        images: imageList
+                    }));
+                } catch (error) {
+                    console.error('保存图片列表失败:', error);
+                }
+            }
+
+            // 检查是否需要刷新（跨浏览器同步）
+            async checkForUpdates() {
+                try {
+                    const stored = localStorage.getItem('telegraph_image_list');
+                    if (!stored) return;
+
+                    const { timestamp, images: storedImages } = JSON.parse(stored);
+                    const currentImages = this.images.map(img => img.id).sort();
+                    const storedImageIds = storedImages.map(img => img.id).sort();
+
+                    // 如果图片列表不一致，强制刷新
+                    if (JSON.stringify(currentImages) !== JSON.stringify(storedImageIds)) {
+                        console.log('🔄 检测到图片列表变化，自动刷新...');
+                        await this.loadImages(true);
+                        this.renderImages();
+                    }
+                } catch (error) {
+                    console.error('检查更新失败:', error);
                 }
             }
 
@@ -487,21 +580,43 @@
             }
 
             async deleteImage(imageId) {
-                if (!confirm('确定要删除这张图片吗？')) return;
+                const image = this.images.find(img => img.id === imageId);
+                if (!image) return;
+
+                if (!confirm(`确定要删除图片 "${image.name}" 吗？\n\n此操作不可撤销！`)) return;
+
+                console.log('🗑️ 开始删除图片:', imageId);
 
                 try {
                     const response = await fetch(`/api/manage/delete/${imageId}`, {
-                        method: 'DELETE'
+                        method: 'DELETE',
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
                     });
 
                     if (response.ok) {
-                        this.images = this.images.filter(img => img.id !== imageId);
+                        console.log('✅ 服务器删除成功');
+
+                        // 显示成功消息
+                        this.showSuccessMessage(`图片 "${image.name}" 删除成功！`);
+
+                        // 等待1秒确保服务器处理完成
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                        // 强制从服务器重新加载图片列表
+                        await this.loadImages(true);
                         this.renderImages();
-                        alert('图片删除成功！');
+
+                        console.log('🔄 图片列表已刷新');
                     } else {
-                        alert('删除失败，请重试');
+                        const errorText = await response.text();
+                        console.error('❌ 删除失败:', response.status, errorText);
+                        alert(`删除失败: ${response.status} ${errorText}`);
                     }
                 } catch (error) {
+                    console.error('❌ 删除异常:', error);
                     alert('删除失败：' + error.message);
                 }
             }
@@ -519,6 +634,8 @@
             }
 
             async uploadImage(file) {
+                console.log('📤 开始上传图片:', file.name);
+
                 const formData = new FormData();
                 formData.append('file', file);
 
@@ -529,15 +646,57 @@
                     });
 
                     if (response.ok) {
-                        alert('上传成功！');
-                        await this.loadImages();
+                        const result = await response.json();
+                        console.log('✅ 上传成功:', result);
+
+                        // 显示成功消息
+                        this.showSuccessMessage(`图片 "${file.name}" 上传成功！`);
+
+                        // 等待1秒确保服务器处理完成
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                        // 强制刷新图片列表
+                        await this.loadImages(true);
                         this.renderImages();
+
+                        console.log('🔄 图片列表已刷新');
                     } else {
-                        alert('上传失败，请重试');
+                        const errorText = await response.text();
+                        console.error('❌ 上传失败:', response.status, errorText);
+                        alert(`上传失败: ${response.status} ${errorText}`);
                     }
                 } catch (error) {
+                    console.error('❌ 上传异常:', error);
                     alert('上传失败：' + error.message);
                 }
+            }
+
+            // 显示成功消息
+            showSuccessMessage(message) {
+                // 创建成功提示
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #34c759;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+                    z-index: 10000;
+                    font-weight: 500;
+                `;
+                notification.textContent = message;
+
+                document.body.appendChild(notification);
+
+                // 3秒后自动移除
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 3000);
             }
 
             formatFileSize(bytes) {
