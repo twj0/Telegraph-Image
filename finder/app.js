@@ -11,6 +11,22 @@ class TelegraphFinder {
         this.historyIndex = 0;
         this.currentContextFileId = null;
 
+        // 性能优化相关
+        this.renderDebounceTimer = null;
+        this.lastRenderTime = 0;
+        this.animationFrame = null;
+        this.isRendering = false;
+
+        // 缓存DOM元素
+        this.domCache = new Map();
+
+        // 虚拟滚动相关
+        this.virtualScrollEnabled = false;
+        this.itemHeight = 120; // 网格项高度
+        this.visibleItems = 50; // 可见项目数量
+        this.scrollTop = 0;
+        this.containerHeight = 0;
+
         this.init();
     }
 
@@ -275,12 +291,65 @@ class TelegraphFinder {
         return items;
     }
 
+    // 防抖渲染机制
     render() {
-        this.updateBreadcrumb();
-        this.updateNavigation();
-        this.updateSidebar();
-        this.renderFiles();
-        this.updateToolbar();
+        // 如果正在渲染，取消之前的渲染
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+        }
+
+        // 使用requestAnimationFrame确保在下一帧渲染
+        this.animationFrame = requestAnimationFrame(() => {
+            this.performRender();
+        });
+    }
+
+    performRender() {
+        if (this.isRendering) return;
+
+        this.isRendering = true;
+        const startTime = performance.now();
+
+        try {
+            this.updateBreadcrumb();
+            this.updateNavigation();
+            this.updateSidebar();
+            this.renderFiles();
+            this.updateToolbar();
+
+            const renderTime = performance.now() - startTime;
+            console.log(`🎨 渲染完成，耗时: ${renderTime.toFixed(2)}ms`);
+        } finally {
+            this.isRendering = false;
+            this.lastRenderTime = performance.now();
+        }
+    }
+
+    // 快速渲染（仅更新必要部分）
+    quickRender(components = []) {
+        if (components.length === 0) {
+            this.render();
+            return;
+        }
+
+        this.animationFrame = requestAnimationFrame(() => {
+            components.forEach(component => {
+                switch (component) {
+                    case 'files':
+                        this.renderFiles();
+                        break;
+                    case 'sidebar':
+                        this.updateSidebar();
+                        break;
+                    case 'breadcrumb':
+                        this.updateBreadcrumb();
+                        break;
+                    case 'toolbar':
+                        this.updateToolbar();
+                        break;
+                }
+            });
+        });
     }
 
     updateSidebar() {
@@ -370,10 +439,12 @@ class TelegraphFinder {
         const emptyState = document.getElementById('emptyState');
 
         if (currentFiles.length === 0) {
+            // 平滑隐藏文件视图
+            this.hideFileViews();
             // 显示空状态
-            fileGrid.style.display = 'none';
-            fileList.style.display = 'none';
-            emptyState.style.display = 'flex';
+            setTimeout(() => {
+                emptyState.style.display = 'flex';
+            }, 150);
             return;
         }
 
@@ -381,20 +452,121 @@ class TelegraphFinder {
         emptyState.style.display = 'none';
 
         if (this.viewMode === 'grid') {
-            this.renderGridView(currentFiles);
-            fileGrid.style.display = 'grid';
-            fileList.style.display = 'none';
+            this.switchToGridView(currentFiles);
         } else {
-            this.renderListView(currentFiles);
-            fileGrid.style.display = 'none';
-            fileList.style.display = 'block';
+            this.switchToListView(currentFiles);
         }
+    }
+
+    hideFileViews() {
+        const fileGrid = document.getElementById('fileGrid');
+        const fileList = document.getElementById('fileList');
+
+        fileGrid.classList.remove('show');
+        fileList.classList.remove('show');
+
+        setTimeout(() => {
+            fileGrid.style.display = 'none';
+            fileList.style.display = 'none';
+        }, 300);
+    }
+
+    switchToGridView(files) {
+        const fileGrid = document.getElementById('fileGrid');
+        const fileList = document.getElementById('fileList');
+
+        // 先隐藏列表视图
+        fileList.classList.remove('show');
+
+        setTimeout(() => {
+            fileList.style.display = 'none';
+
+            // 渲染网格视图
+            this.renderGridView(files);
+            fileGrid.style.display = 'grid';
+
+            // 触发显示动画
+            requestAnimationFrame(() => {
+                fileGrid.classList.add('show');
+            });
+        }, fileList.classList.contains('show') ? 150 : 0);
+    }
+
+    switchToListView(files) {
+        const fileGrid = document.getElementById('fileGrid');
+        const fileList = document.getElementById('fileList');
+
+        // 先隐藏网格视图
+        fileGrid.classList.remove('show');
+
+        setTimeout(() => {
+            fileGrid.style.display = 'none';
+
+            // 渲染列表视图
+            this.renderListView(files);
+            fileList.style.display = 'block';
+
+            // 触发显示动画
+            requestAnimationFrame(() => {
+                fileList.classList.add('show');
+            });
+        }, fileGrid.classList.contains('show') ? 150 : 0);
     }
 
     renderGridView(items) {
         const fileGrid = document.getElementById('fileGrid');
 
-        fileGrid.innerHTML = items.map(item => `
+        // 如果文件数量超过阈值，启用虚拟滚动
+        if (items.length > 100) {
+            this.renderVirtualGrid(items);
+            return;
+        }
+
+        // 正常渲染
+        fileGrid.innerHTML = items.map((item, index) => `
+            <div class="file-item ${item.isFolder ? 'folder' : ''}"
+                 data-file-id="${item.id}"
+                 data-file-type="${item.type}"
+                 data-is-folder="${item.isFolder || false}"
+                 style="animation-delay: ${Math.min(index * 0.05, 0.5)}s">
+                <div class="file-icon ${item.type}">
+                    ${this.getFileIcon(item)}
+                </div>
+                <div class="file-name" title="${item.name}">${item.name}</div>
+            </div>
+        `).join('');
+
+        // 添加文件项点击事件
+        this.bindFileItemEvents(fileGrid);
+    }
+
+    renderVirtualGrid(items) {
+        const fileGrid = document.getElementById('fileGrid');
+        const container = fileGrid.parentElement;
+
+        // 计算可见区域
+        const containerRect = container.getBoundingClientRect();
+        this.containerHeight = containerRect.height;
+
+        const itemsPerRow = Math.floor(containerRect.width / 140); // 120px + 20px gap
+        const rowHeight = 140; // 120px + 20px gap
+
+        const startRow = Math.floor(this.scrollTop / rowHeight);
+        const endRow = Math.min(
+            startRow + Math.ceil(this.containerHeight / rowHeight) + 2,
+            Math.ceil(items.length / itemsPerRow)
+        );
+
+        const startIndex = startRow * itemsPerRow;
+        const endIndex = Math.min(endRow * itemsPerRow, items.length);
+
+        // 清空并重新渲染可见项
+        fileGrid.innerHTML = '';
+        fileGrid.style.height = `${Math.ceil(items.length / itemsPerRow) * rowHeight}px`;
+        fileGrid.style.paddingTop = `${startRow * rowHeight}px`;
+
+        const visibleItems = items.slice(startIndex, endIndex);
+        fileGrid.innerHTML = visibleItems.map(item => `
             <div class="file-item ${item.isFolder ? 'folder' : ''}"
                  data-file-id="${item.id}"
                  data-file-type="${item.type}"
@@ -406,8 +578,12 @@ class TelegraphFinder {
             </div>
         `).join('');
 
-        // 添加文件项点击事件
-        fileGrid.querySelectorAll('.file-item').forEach(item => {
+        this.bindFileItemEvents(fileGrid);
+        console.log(`🎯 虚拟滚动: 渲染 ${endIndex - startIndex} / ${items.length} 项`);
+    }
+
+    bindFileItemEvents(container) {
+        container.querySelectorAll('.file-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 this.selectFile(item, e.ctrlKey || e.metaKey);
             });
@@ -525,21 +701,56 @@ class TelegraphFinder {
         const notifications = document.getElementById('notifications');
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
+
+        // 添加关闭按钮
         notification.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
                 <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-                <span>${message}</span>
+                <span style="flex: 1;">${message}</span>
+                <button class="notification-close" style="background: none; border: none; color: #999; cursor: pointer; padding: 4px;">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         `;
-        
+
+        // 添加关闭按钮事件
+        const closeBtn = notification.querySelector('.notification-close');
+        closeBtn.addEventListener('click', () => {
+            this.removeNotification(notification);
+        });
+
         notifications.appendChild(notification);
-        
+
         // 3秒后自动移除
+        const autoRemoveTimer = setTimeout(() => {
+            this.removeNotification(notification);
+        }, 3000);
+
+        // 鼠标悬停时暂停自动移除
+        notification.addEventListener('mouseenter', () => {
+            clearTimeout(autoRemoveTimer);
+        });
+
+        // 鼠标离开时重新开始计时
+        notification.addEventListener('mouseleave', () => {
+            setTimeout(() => {
+                this.removeNotification(notification);
+            }, 1000);
+        });
+    }
+
+    removeNotification(notification) {
+        if (!notification.parentNode) return;
+
+        // 添加移除动画
+        notification.classList.add('removing');
+
+        // 动画完成后移除元素
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
             }
-        }, 3000);
+        }, 300);
     }
 
     // 导航功能
@@ -572,13 +783,30 @@ class TelegraphFinder {
         }
     }
 
-    // 视图切换
+    // 视图切换 - 优化动画效果
     toggleViewMode() {
-        this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
         const viewModeBtn = document.getElementById('viewModeBtn');
-        viewModeBtn.innerHTML = this.viewMode === 'grid' ?
-            '<i class="fas fa-list"></i>' : '<i class="fas fa-th"></i>';
-        this.renderFiles();
+
+        // 添加点击动画
+        viewModeBtn.style.transform = 'scale(0.9)';
+
+        setTimeout(() => {
+            this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+            viewModeBtn.innerHTML = this.viewMode === 'grid' ?
+                '<i class="fas fa-list"></i>' : '<i class="fas fa-th"></i>';
+
+            // 恢复按钮大小
+            viewModeBtn.style.transform = 'scale(1)';
+
+            // 平滑切换视图
+            this.renderFiles();
+
+            // 显示切换提示
+            this.showNotification(
+                `已切换到${this.viewMode === 'grid' ? '网格' : '列表'}视图`,
+                'success'
+            );
+        }, 100);
     }
 
     // 文件上传
@@ -694,6 +922,10 @@ class TelegraphFinder {
     // 新建文件夹
     createNewFolder() {
         console.log('🧪 开始创建新文件夹');
+
+        // 立即显示创建中状态
+        this.showNotification('正在创建文件夹...', 'info');
+
         const folderName = prompt('请输入文件夹名称:');
         if (!folderName || !folderName.trim()) {
             console.log('❌ 用户取消或输入空名称');
@@ -716,32 +948,44 @@ class TelegraphFinder {
             parentFolder: this.currentPath,
             createdAt: new Date(),
             size: 0,
-            url: '#folder'
+            url: '#folder',
+            isCreating: true // 标记为创建中
         };
 
-        // 直接添加到文件列表中显示（临时方案）
+        // 立即添加到界面（乐观更新）
         this.files.unshift(folder);
-
-        // 同时保存到文件夹映射
         this.folders.set(folderId, folder);
 
-        // 简化的本地存储
-        try {
-            const existingFolders = JSON.parse(localStorage.getItem('finder_folders') || '[]');
-            existingFolders.push(folder);
-            localStorage.setItem('finder_folders', JSON.stringify(existingFolders));
-            console.log('✅ 文件夹已保存到localStorage');
-        } catch (error) {
-            console.error('❌ 保存文件夹失败:', error);
-        }
+        // 立即渲染，提供即时反馈
+        this.quickRender(['files', 'sidebar']);
 
-        // 发送到服务器（如果可用）
-        this.createFolderOnServer(folderName.trim(), this.currentPath);
+        // 异步保存到本地存储
+        setTimeout(() => {
+            try {
+                const existingFolders = JSON.parse(localStorage.getItem('finder_folders') || '[]');
+                existingFolders.push(folder);
+                localStorage.setItem('finder_folders', JSON.stringify(existingFolders));
+                console.log('✅ 文件夹已保存到localStorage');
 
-        this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
-        console.log('🔄 重新渲染界面');
-        this.renderFiles();
-        this.updateSidebar();
+                // 移除创建中标记
+                folder.isCreating = false;
+                this.quickRender(['files']);
+
+            } catch (error) {
+                console.error('❌ 保存文件夹失败:', error);
+                // 如果保存失败，从界面移除
+                this.files = this.files.filter(f => f.id !== folderId);
+                this.folders.delete(folderId);
+                this.quickRender(['files', 'sidebar']);
+                this.showNotification('文件夹创建失败', 'error');
+                return;
+            }
+
+            // 发送到服务器（如果可用）
+            this.createFolderOnServer(folderName.trim(), this.currentPath);
+
+            this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
+        }, 50); // 50ms延迟，确保UI更新完成
     }
 
     async createFolderOnServer(name, parentFolder) {
@@ -863,7 +1107,7 @@ class TelegraphFinder {
         }
     }
 
-    // 右键菜单
+    // 右键菜单 - 优化动画效果
     showContextMenu(e, item) {
         const contextMenu = document.getElementById('contextMenu');
         const fileId = item.dataset.fileId;
@@ -876,19 +1120,29 @@ class TelegraphFinder {
         // 存储当前操作的文件ID
         this.currentContextFileId = fileId;
 
-        // 显示菜单
+        // 先隐藏菜单（如果已显示）
+        contextMenu.classList.remove('show');
+        contextMenu.classList.add('hide');
+
+        // 设置位置
         contextMenu.style.display = 'block';
         contextMenu.style.left = e.pageX + 'px';
         contextMenu.style.top = e.pageY + 'px';
 
         // 确保菜单不超出屏幕
-        const rect = contextMenu.getBoundingClientRect();
-        if (rect.right > window.innerWidth) {
-            contextMenu.style.left = (e.pageX - rect.width) + 'px';
-        }
-        if (rect.bottom > window.innerHeight) {
-            contextMenu.style.top = (e.pageY - rect.height) + 'px';
-        }
+        requestAnimationFrame(() => {
+            const rect = contextMenu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                contextMenu.style.left = (e.pageX - rect.width) + 'px';
+            }
+            if (rect.bottom > window.innerHeight) {
+                contextMenu.style.top = (e.pageY - rect.height) + 'px';
+            }
+
+            // 显示动画
+            contextMenu.classList.remove('hide');
+            contextMenu.classList.add('show');
+        });
 
         // 绑定菜单项点击事件
         this.bindContextMenuEvents();
@@ -918,7 +1172,18 @@ class TelegraphFinder {
     }
 
     hideContextMenu() {
-        document.getElementById('contextMenu').style.display = 'none';
+        const contextMenu = document.getElementById('contextMenu');
+
+        // 添加隐藏动画
+        contextMenu.classList.remove('show');
+        contextMenu.classList.add('hide');
+
+        // 动画完成后隐藏元素
+        setTimeout(() => {
+            contextMenu.style.display = 'none';
+            contextMenu.classList.remove('hide');
+        }, 100);
+
         this.currentContextFileId = null;
     }
 
