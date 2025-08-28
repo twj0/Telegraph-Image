@@ -78,8 +78,11 @@ class MacOSFinder {
 
         // 新建文件夹
         document.getElementById('newFolderBtn').addEventListener('click', () => {
-            this.createNewFolder();
+            this.showNewFolderModal();
         });
+
+        // 新建文件夹模态框事件
+        this.setupNewFolderModal();
 
         // 侧边栏导航
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -148,6 +151,70 @@ class MacOSFinder {
                     this.handleFileSelect(files);
                 }
             }
+        });
+    }
+
+    setupNewFolderModal() {
+        const modal = document.getElementById('newFolderModal');
+        const closeBtn = document.getElementById('closeFolderModal');
+        const cancelBtn = document.getElementById('cancelFolderBtn');
+        const createBtn = document.getElementById('createFolderBtn');
+        const nameInput = document.getElementById('folderNameInput');
+        const colorPicker = document.getElementById('folderColorPicker');
+
+        // 关闭模态框
+        const closeModal = () => {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+            nameInput.value = '';
+            this.resetColorPicker();
+        };
+
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+
+        // 点击遮罩关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // ESC键关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+
+        // 颜色选择
+        colorPicker.addEventListener('click', (e) => {
+            if (e.target.classList.contains('color-option')) {
+                colorPicker.querySelectorAll('.color-option').forEach(option => {
+                    option.classList.remove('active');
+                });
+                e.target.classList.add('active');
+            }
+        });
+
+        // 创建文件夹
+        createBtn.addEventListener('click', () => {
+            this.handleCreateFolder();
+        });
+
+        // 回车键创建
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.handleCreateFolder();
+            }
+        });
+
+        // 输入验证
+        nameInput.addEventListener('input', () => {
+            const isValid = nameInput.value.trim().length > 0;
+            createBtn.disabled = !isValid;
         });
     }
 
@@ -774,41 +841,152 @@ class MacOSFinder {
         }
     }
 
-    async createNewFolder() {
-        const folderName = prompt('请输入文件夹名称:');
-        if (folderName && folderName.trim()) {
+    showNewFolderModal() {
+        const modal = document.getElementById('newFolderModal');
+        const nameInput = document.getElementById('folderNameInput');
+        const locationText = document.getElementById('currentLocationText');
+        const createBtn = document.getElementById('createFolderBtn');
+
+        // 更新当前位置显示
+        const currentFolderId = this.getCurrentFolderId();
+        if (currentFolderId === 'root') {
+            locationText.textContent = '全部文件';
+        } else {
+            const folder = this.folders.get(currentFolderId);
+            locationText.textContent = folder ? folder.name : '未知位置';
+        }
+
+        // 重置表单
+        nameInput.value = '';
+        createBtn.disabled = true;
+        this.resetColorPicker();
+
+        // 显示模态框
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+            nameInput.focus();
+        }, 10);
+    }
+
+    resetColorPicker() {
+        const colorPicker = document.getElementById('folderColorPicker');
+        colorPicker.querySelectorAll('.color-option').forEach(option => {
+            option.classList.remove('active');
+        });
+        colorPicker.querySelector('.color-option').classList.add('active');
+    }
+
+    getSelectedColor() {
+        const activeColor = document.querySelector('.color-option.active');
+        return activeColor ? activeColor.dataset.color : '#4A90E2';
+    }
+
+    async handleCreateFolder() {
+        const nameInput = document.getElementById('folderNameInput');
+        const folderName = nameInput.value.trim();
+
+        if (!folderName) {
+            this.showNotification('请输入文件夹名称', 'error');
+            return;
+        }
+
+        // 检查名称是否重复
+        const currentFolderId = this.getCurrentFolderId();
+        const existingItems = this.getCurrentFolderItems();
+        const nameExists = existingItems.some(item =>
+            item.name.toLowerCase() === folderName.toLowerCase()
+        );
+
+        if (nameExists) {
+            this.showNotification('文件夹名称已存在', 'error');
+            nameInput.focus();
+            nameInput.select();
+            return;
+        }
+
+        try {
             const folderId = 'folder_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const currentFolderId = this.getCurrentFolderId();
+            const selectedColor = this.getSelectedColor();
 
             const newFolder = {
                 id: folderId,
-                name: folderName.trim(),
+                name: folderName,
                 parentFolder: currentFolderId,
                 isFolder: true,
                 isCustom: true,
-                color: '#4A90E2',
+                color: selectedColor,
                 createdAt: new Date().toISOString()
             };
 
-            this.folders.set(folderId, newFolder);
+            // 如果有后端API，尝试保存到服务器
+            try {
+                const response = await fetch('/api/manage/folders-enhanced', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: folderName,
+                        color: selectedColor,
+                        parentFolder: currentFolderId
+                    })
+                });
+
+                if (response.ok) {
+                    const serverFolder = await response.json();
+                    // 使用服务器返回的数据
+                    newFolder.id = serverFolder.id;
+                    console.log('文件夹已保存到服务器');
+                }
+            } catch (apiError) {
+                console.log('API不可用，使用本地存储:', apiError.message);
+            }
+
+            // 添加到本地数据结构
+            this.folders.set(newFolder.id, newFolder);
 
             // 更新文件夹结构
             if (!this.folderStructure.has(currentFolderId)) {
                 this.folderStructure.set(currentFolderId, new Set());
             }
-            this.folderStructure.get(currentFolderId).add(folderId);
+            this.folderStructure.get(currentFolderId).add(newFolder.id);
 
-            // 保存数据
-            localStorage.setItem(`folder_${folderId}`, JSON.stringify(newFolder));
+            // 保存到本地存储
+            localStorage.setItem(`folder_${newFolder.id}`, JSON.stringify(newFolder));
             this.saveFolderStructure();
 
             // 如果在根目录，添加到侧边栏
             if (currentFolderId === 'root') {
-                this.addFolderToSidebar(folderId, folderName.trim(), '#4A90E2');
+                this.addFolderToSidebar(newFolder.id, folderName, selectedColor);
             }
 
+            // 关闭模态框
+            const modal = document.getElementById('newFolderModal');
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+
+            // 刷新视图
             this.renderCurrentView();
+
+            // 添加新建动画
+            setTimeout(() => {
+                const newFolderElement = document.querySelector(`[data-item-id="${newFolder.id}"]`);
+                if (newFolderElement) {
+                    newFolderElement.classList.add('newly-created');
+                    setTimeout(() => {
+                        newFolderElement.classList.remove('newly-created');
+                    }, 600);
+                }
+            }, 50);
+
             this.showNotification('文件夹创建成功', 'success');
+
+        } catch (error) {
+            console.error('创建文件夹失败:', error);
+            this.showNotification('创建文件夹失败', 'error');
         }
     }
 
@@ -1211,18 +1389,135 @@ class MacOSFinder {
         );
     }
 
-    async renameItem(item) {
-        const newName = prompt(`重命名 "${item.name}":`, item.name);
-        if (newName && newName.trim() && newName !== item.name) {
-            item.name = newName.trim();
+    showRenameModal(item) {
+        const modal = document.getElementById('renameModal');
+        const nameInput = document.getElementById('renameInput');
+        const confirmBtn = document.getElementById('confirmRenameBtn');
+        const cancelBtn = document.getElementById('cancelRenameBtn');
+        const closeBtn = document.getElementById('closeRenameModal');
+
+        // 设置当前重命名的项目
+        this.currentRenameItem = item;
+
+        // 设置输入框
+        nameInput.value = item.name;
+        nameInput.select();
+
+        // 显示模态框
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+            nameInput.focus();
+        }, 10);
+
+        // 关闭模态框函数
+        const closeModal = () => {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+            this.currentRenameItem = null;
+        };
+
+        // 绑定事件（移除之前的事件监听器）
+        const newCloseBtn = closeBtn.cloneNode(true);
+        closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newCloseBtn.addEventListener('click', closeModal);
+        newCancelBtn.addEventListener('click', closeModal);
+        newConfirmBtn.addEventListener('click', () => this.handleRename());
+
+        // 回车确认
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.handleRename();
+            } else if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // 点击遮罩关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+    }
+
+    async handleRename() {
+        const nameInput = document.getElementById('renameInput');
+        const newName = nameInput.value.trim();
+        const item = this.currentRenameItem;
+
+        if (!newName) {
+            this.showNotification('请输入名称', 'error');
+            return;
+        }
+
+        if (newName === item.name) {
+            // 名称没有变化，直接关闭
+            document.getElementById('renameModal').classList.remove('show');
+            setTimeout(() => {
+                document.getElementById('renameModal').style.display = 'none';
+            }, 300);
+            return;
+        }
+
+        // 检查名称是否重复
+        const currentItems = this.getCurrentFolderItems();
+        const nameExists = currentItems.some(existingItem =>
+            existingItem.id !== item.id &&
+            existingItem.name.toLowerCase() === newName.toLowerCase()
+        );
+
+        if (nameExists) {
+            this.showNotification('名称已存在', 'error');
+            nameInput.focus();
+            nameInput.select();
+            return;
+        }
+
+        try {
+            // 更新项目名称
+            item.name = newName;
 
             if (item.isFolder) {
+                // 如果是文件夹，保存到本地存储
                 localStorage.setItem(`folder_${item.id}`, JSON.stringify(item));
+
+                // 如果在侧边栏中，更新侧边栏显示
+                const sidebarItem = document.querySelector(`[data-folder="${item.id}"] span`);
+                if (sidebarItem) {
+                    sidebarItem.textContent = newName;
+                }
+            } else {
+                // 如果是文件，这里可以调用API更新文件元数据
+                console.log('文件重命名功能需要后端支持');
             }
 
+            // 关闭模态框
+            const modal = document.getElementById('renameModal');
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+
+            // 刷新视图
             this.renderCurrentView();
             this.showNotification('重命名成功', 'success');
+
+        } catch (error) {
+            console.error('重命名失败:', error);
+            this.showNotification('重命名失败', 'error');
         }
+    }
+
+    async renameItem(item) {
+        this.showRenameModal(item);
     }
 
     async deleteItem(item) {

@@ -167,6 +167,70 @@
         <div class="upload-progress" id="uploadProgress">
             <!-- 进度项将通过JavaScript动态生成 -->
         </div>
+
+        <!-- 新建文件夹模态框 -->
+        <div class="modal-overlay" id="newFolderModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>新建文件夹</h3>
+                    <button type="button" class="modal-close" id="closeFolderModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="folderNameInput">文件夹名称</label>
+                        <input type="text" id="folderNameInput" class="form-input" placeholder="请输入文件夹名称" maxlength="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="folderColorSelect">文件夹颜色</label>
+                        <div class="color-picker" id="folderColorPicker">
+                            <div class="color-option active color-blue" data-color="#4A90E2"></div>
+                            <div class="color-option color-cyan" data-color="#5AC8FA"></div>
+                            <div class="color-option color-green" data-color="#34C759"></div>
+                            <div class="color-option color-orange" data-color="#FF9500"></div>
+                            <div class="color-option color-red" data-color="#FF3B30"></div>
+                            <div class="color-option color-purple" data-color="#AF52DE"></div>
+                            <div class="color-option color-pink" data-color="#FF2D92"></div>
+                            <div class="color-option color-gray" data-color="#8E8E93"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>创建位置</label>
+                        <div class="location-info" id="folderLocationInfo">
+                            <i class="fas fa-folder"></i>
+                            <span id="currentLocationText">全部文件</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelFolderBtn">取消</button>
+                    <button type="button" class="btn btn-primary" id="createFolderBtn">创建</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 重命名模态框 -->
+        <div class="modal-overlay" id="renameModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>重命名</h3>
+                    <button type="button" class="modal-close" id="closeRenameModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="renameInput">新名称</label>
+                        <input type="text" id="renameInput" class="form-input" placeholder="请输入新名称" maxlength="100">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelRenameBtn">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmRenameBtn">确认</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 隐藏的文件输入 -->
@@ -180,6 +244,6 @@
         </a>
     </div>
 
-    <script src="finder-standalone.js"></script>
+    <script src="finder-enhanced.js"></script>
 </body>
 </html>
