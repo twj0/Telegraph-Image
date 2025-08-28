@@ -30,6 +30,9 @@ class TelegraphFinder {
         // 加载初始数据
         await this.loadFiles();
 
+        // 加载保存的文件夹
+        this.loadSavedFolders();
+
         // 渲染界面
         this.render();
 
@@ -37,6 +40,26 @@ class TelegraphFinder {
 
         // 测试新建文件夹按钮
         this.testNewFolderButton();
+    }
+
+    loadSavedFolders() {
+        try {
+            const savedFolders = JSON.parse(localStorage.getItem('finder_folders') || '[]');
+            console.log('📂 加载保存的文件夹:', savedFolders.length, '个');
+
+            for (const folder of savedFolders) {
+                // 添加到文件列表中显示
+                this.files.push(folder);
+                // 添加到文件夹映射
+                this.folders.set(folder.id, folder);
+            }
+
+            if (savedFolders.length > 0) {
+                console.log('✅ 已加载', savedFolders.length, '个保存的文件夹');
+            }
+        } catch (error) {
+            console.error('❌ 加载保存的文件夹失败:', error);
+        }
     }
 
     testNewFolderButton() {
@@ -670,21 +693,19 @@ class TelegraphFinder {
 
     // 新建文件夹
     createNewFolder() {
-        console.log('开始创建新文件夹');
+        console.log('🧪 开始创建新文件夹');
         const folderName = prompt('请输入文件夹名称:');
         if (!folderName || !folderName.trim()) {
-            console.log('用户取消或输入空名称');
+            console.log('❌ 用户取消或输入空名称');
             return;
         }
 
         const folderId = 'folder_' + Date.now();
-        const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
 
-        console.log('创建文件夹参数:', {
+        console.log('📁 创建文件夹:', {
             folderName: folderName.trim(),
             folderId: folderId,
-            currentPath: this.currentPath,
-            currentFolderId: currentFolderId
+            currentPath: this.currentPath
         });
 
         const folder = {
@@ -692,31 +713,35 @@ class TelegraphFinder {
             name: folderName.trim(),
             isFolder: true,
             type: 'folder',
-            parentFolder: currentFolderId,
+            parentFolder: this.currentPath,
             createdAt: new Date(),
-            size: 0
+            size: 0,
+            url: '#folder'
         };
 
-        // 添加到文件夹映射
+        // 直接添加到文件列表中显示（临时方案）
+        this.files.unshift(folder);
+
+        // 同时保存到文件夹映射
         this.folders.set(folderId, folder);
-        console.log('文件夹已添加到映射，当前文件夹数:', this.folders.size);
 
-        // 更新文件夹结构
-        if (!this.folderStructure[currentFolderId]) {
-            this.folderStructure[currentFolderId] = [];
+        // 简化的本地存储
+        try {
+            const existingFolders = JSON.parse(localStorage.getItem('finder_folders') || '[]');
+            existingFolders.push(folder);
+            localStorage.setItem('finder_folders', JSON.stringify(existingFolders));
+            console.log('✅ 文件夹已保存到localStorage');
+        } catch (error) {
+            console.error('❌ 保存文件夹失败:', error);
         }
-        this.folderStructure[currentFolderId].push(folderId);
-        console.log('文件夹结构已更新:', this.folderStructure);
 
-        // 保存到本地存储
-        this.saveFolderStructure();
-
-        // 发送到服务器
-        this.createFolderOnServer(folderName.trim(), currentFolderId);
+        // 发送到服务器（如果可用）
+        this.createFolderOnServer(folderName.trim(), this.currentPath);
 
         this.showNotification(`文件夹 "${folderName}" 创建成功`, 'success');
-        console.log('开始重新渲染界面');
-        this.render();
+        console.log('🔄 重新渲染界面');
+        this.renderFiles();
+        this.updateSidebar();
     }
 
     async createFolderOnServer(name, parentFolder) {
