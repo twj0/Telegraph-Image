@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegraph Finder - 功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 20px;
+            background: #f5f5f7;
+        }
+        
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e5e5e7;
+            border-radius: 8px;
+        }
+        
+        .test-button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .test-button:hover {
+            background: #0056b3;
+        }
+        
+        .log-area {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .file-item-test {
+            width: 100px;
+            height: 100px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 10px;
+            cursor: pointer;
+        }
+        
+        .file-item-test:hover {
+            background: #e0e0e0;
+        }
+        
+        .context-menu-test {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 5px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+        
+        .menu-item-test {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .menu-item-test:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Telegraph Finder 功能测试</h1>
+        
+        <div class="test-section">
+            <h3>1. 基础功能测试</h3>
+            <button class="test-button" onclick="testNewFolder()">测试新建文件夹</button>
+            <button class="test-button" onclick="testLocalStorage()">测试本地存储</button>
+            <button class="test-button" onclick="clearLogs()">清除日志</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. 右键菜单测试</h3>
+            <p>右键点击下面的文件项测试右键菜单：</p>
+            <div class="file-item-test" data-file-id="test-file-1">
+                <div>📄</div>
+                <div>测试文件1</div>
+            </div>
+            <div class="file-item-test" data-file-id="test-file-2">
+                <div>🖼️</div>
+                <div>测试图片</div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 调试日志</h3>
+            <div id="logArea" class="log-area">等待测试...\n</div>
+        </div>
+    </div>
+    
+    <!-- 测试右键菜单 -->
+    <div id="testContextMenu" class="context-menu-test">
+        <div class="menu-item-test" data-action="open">打开</div>
+        <div class="menu-item-test" data-action="copy">复制链接</div>
+        <div class="menu-item-test" data-action="delete">删除</div>
+    </div>
+
+    <script>
+        let testFileId = null;
+        
+        // 劫持console.log来显示日志
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const logArea = document.getElementById('logArea');
+            if (logArea) {
+                logArea.textContent += args.join(' ') + '\n';
+                logArea.scrollTop = logArea.scrollHeight;
+            }
+        };
+        
+        // 测试新建文件夹
+        function testNewFolder() {
+            console.log('🧪 开始测试新建文件夹功能');
+            
+            const folderName = prompt('请输入测试文件夹名称:');
+            if (folderName) {
+                console.log('✅ 用户输入文件夹名称:', folderName);
+                
+                // 模拟文件夹创建逻辑
+                const folderId = 'test_folder_' + Date.now();
+                const folderData = {
+                    id: folderId,
+                    name: folderName,
+                    isFolder: true,
+                    createdAt: new Date()
+                };
+                
+                // 保存到localStorage
+                localStorage.setItem('test_folder_' + folderId, JSON.stringify(folderData));
+                console.log('✅ 文件夹数据已保存到localStorage');
+                console.log('📁 文件夹信息:', folderData);
+            } else {
+                console.log('❌ 用户取消或输入为空');
+            }
+        }
+        
+        // 测试本地存储
+        function testLocalStorage() {
+            console.log('🧪 测试本地存储功能');
+            
+            const testData = {
+                test: true,
+                timestamp: Date.now(),
+                message: 'Telegraph Finder 测试数据'
+            };
+            
+            try {
+                localStorage.setItem('finder_test', JSON.stringify(testData));
+                const retrieved = JSON.parse(localStorage.getItem('finder_test'));
+                console.log('✅ localStorage 读写正常');
+                console.log('📦 测试数据:', retrieved);
+                
+                // 显示所有finder相关的存储
+                const finderKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.includes('finder') || key.includes('folder'))) {
+                        finderKeys.push(key);
+                    }
+                }
+                console.log('🗂️ 找到的finder相关存储键:', finderKeys);
+                
+            } catch (error) {
+                console.log('❌ localStorage 测试失败:', error);
+            }
+        }
+        
+        // 清除日志
+        function clearLogs() {
+            document.getElementById('logArea').textContent = '日志已清除\n';
+        }
+        
+        // 右键菜单测试
+        document.addEventListener('contextmenu', (e) => {
+            const fileItem = e.target.closest('.file-item-test');
+            if (fileItem) {
+                e.preventDefault();
+                console.log('🖱️ 右键点击测试文件项:', fileItem.dataset.fileId);
+                
+                testFileId = fileItem.dataset.fileId;
+                const menu = document.getElementById('testContextMenu');
+                menu.style.display = 'block';
+                menu.style.left = e.pageX + 'px';
+                menu.style.top = e.pageY + 'px';
+            }
+        });
+        
+        // 菜单项点击
+        document.addEventListener('click', (e) => {
+            const menuItem = e.target.closest('.menu-item-test[data-action]');
+            if (menuItem) {
+                e.preventDefault();
+                const action = menuItem.dataset.action;
+                console.log('🎯 菜单动作:', action, '文件ID:', testFileId);
+                
+                switch (action) {
+                    case 'open':
+                        console.log('📂 执行打开操作');
+                        break;
+                    case 'copy':
+                        console.log('📋 执行复制链接操作');
+                        break;
+                    case 'delete':
+                        console.log('🗑️ 执行删除操作');
+                        break;
+                }
+                
+                document.getElementById('testContextMenu').style.display = 'none';
+            } else {
+                // 点击其他地方关闭菜单
+                document.getElementById('testContextMenu').style.display = 'none';
+            }
+        });
+        
+        console.log('🚀 Telegraph Finder 测试页面已加载');
+        console.log('💡 请使用上面的按钮测试各项功能');
+    </script>
+</body>
+</html>

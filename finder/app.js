@@ -15,7 +15,8 @@ class TelegraphFinder {
     }
 
     async init() {
-        console.log('初始化 Telegraph Finder...');
+        console.log('🚀 Telegraph Finder v2.1 初始化...');
+        console.log('如果功能异常，请按 Ctrl+F5 强制刷新页面');
 
         // 初始化文件夹系统
         this.initializeFolders();
@@ -32,7 +33,19 @@ class TelegraphFinder {
         // 渲染界面
         this.render();
 
-        console.log('Telegraph Finder 初始化完成');
+        console.log('✅ Telegraph Finder v2.1 初始化完成');
+
+        // 测试新建文件夹按钮
+        this.testNewFolderButton();
+    }
+
+    testNewFolderButton() {
+        const newFolderBtn = document.getElementById('newFolderBtn');
+        if (newFolderBtn) {
+            console.log('✅ 新建文件夹按钮找到');
+        } else {
+            console.error('❌ 新建文件夹按钮未找到');
+        }
     }
 
     initializeFolders() {
@@ -93,9 +106,14 @@ class TelegraphFinder {
 
         // 右键菜单
         document.addEventListener('contextmenu', (e) => {
-            if (e.target.closest('.file-item')) {
+            console.log('🖱️ 右键点击事件触发');
+            const fileItem = e.target.closest('.file-item');
+            if (fileItem) {
+                console.log('✅ 找到文件项，显示右键菜单');
                 e.preventDefault();
-                this.showContextMenu(e, e.target.closest('.file-item'));
+                this.showContextMenu(e, fileItem);
+            } else {
+                console.log('❌ 未找到文件项');
             }
         });
 
