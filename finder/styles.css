@@ -802,6 +802,114 @@ body {
     100% { transform: translateX(100%); }
 }
 
+/* 图片预览模态框 */
+.image-preview-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    z-index: 1002;
+    animation: modalSlideIn 0.3s ease;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e5e7;
+    background: #f8f9fa;
+}
+
+.preview-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.preview-body {
+    display: flex;
+    max-height: calc(90vh - 80px);
+}
+
+.preview-body img {
+    max-width: 60%;
+    max-height: 100%;
+    object-fit: contain;
+    background: #f0f0f0;
+}
+
+.preview-info {
+    flex: 1;
+    padding: 20px;
+    background: #fafafa;
+    overflow-y: auto;
+}
+
+.info-item {
+    margin-bottom: 16px;
+}
+
+.info-item .label {
+    display: block;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.info-item span:not(.label) {
+    color: #333;
+    font-size: 14px;
+}
+
+.info-item input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d1d6;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+}
+
+.info-item input:focus {
+    outline: none;
+    border-color: #007aff;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* 收藏按钮状态 */
+.btn-icon.favorited {
+    color: #ff9500;
+}
+
+.btn-icon.favorited:hover {
+    color: #ff8c00;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .sidebar {

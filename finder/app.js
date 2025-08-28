@@ -1,14 +1,11 @@
 // Telegraph Finder - 主应用程序
-class TelegraphFinder {
+class TelegraphImageFinder {
     constructor() {
-        this.currentPath = '/';
         this.viewMode = 'grid'; // 'grid' 或 'list'
-        this.files = [];
-        this.folders = new Map();
-        this.folderStructure = { root: [] };
+        this.images = [];
+        this.favorites = new Set();
         this.selectedItems = new Set();
-        this.history = ['/'];
-        this.historyIndex = 0;
+        this.currentFilter = 'all'; // 'all', 'recent', 'favorites'
         this.currentContextFileId = null;
 
         // 性能优化相关
@@ -17,13 +14,14 @@ class TelegraphFinder {
         this.animationFrame = null;
         this.isRendering = false;
 
-        // 缓存DOM元素
-        this.domCache = new Map();
+        // 图片缓存
+        this.imageCache = new Map();
+        this.preloadQueue = [];
 
         // 虚拟滚动相关
         this.virtualScrollEnabled = false;
-        this.itemHeight = 120; // 网格项高度
-        this.visibleItems = 50; // 可见项目数量
+        this.itemHeight = 120;
+        this.visibleItems = 50;
         this.scrollTop = 0;
         this.containerHeight = 0;
 
@@ -31,50 +29,107 @@ class TelegraphFinder {
     }
 
     async init() {
-        console.log('🚀 Telegraph Finder v2.1 初始化...');
-        console.log('如果功能异常，请按 Ctrl+F5 强制刷新页面');
-
-        // 初始化文件夹系统
-        this.initializeFolders();
-
-        // 加载文件夹结构
-        this.loadFolderStructure();
+        console.log('🚀 Telegraph Image Finder 初始化...');
+        console.log('专注于图片管理的极简体验');
 
         // 设置事件监听器
         this.setupEventListeners();
 
-        // 加载初始数据
-        await this.loadFiles();
+        // 加载图片数据
+        await this.loadImages();
 
-        // 加载保存的文件夹
-        this.loadSavedFolders();
+        // 加载收藏夹
+        this.loadFavorites();
 
-        // 渲染界面
+        // 初始渲染
         this.render();
 
-        console.log('✅ Telegraph Finder v2.1 初始化完成');
-
-        // 测试新建文件夹按钮
-        this.testNewFolderButton();
+        console.log('✅ Telegraph Image Finder 初始化完成');
     }
 
-    loadSavedFolders() {
+    // 加载图片数据
+    async loadImages() {
+        console.log('📸 开始加载图片列表...');
+        this.showLoading(true);
+
         try {
-            const savedFolders = JSON.parse(localStorage.getItem('finder_folders') || '[]');
-            console.log('📂 加载保存的文件夹:', savedFolders.length, '个');
-
-            for (const folder of savedFolders) {
-                // 添加到文件列表中显示
-                this.files.push(folder);
-                // 添加到文件夹映射
-                this.folders.set(folder.id, folder);
-            }
-
-            if (savedFolders.length > 0) {
-                console.log('✅ 已加载', savedFolders.length, '个保存的文件夹');
+            const response = await fetch('/api/manage/list');
+            if (response.ok) {
+                const data = await response.json();
+                // 只保留图片文件
+                this.images = this.filterImages(data);
+                console.log(`✅ 成功加载 ${this.images.length} 张图片`);
+            } else {
+                throw new Error(`HTTP ${response.status}`);
             }
         } catch (error) {
-            console.error('❌ 加载保存的文件夹失败:', error);
+            console.log('🎭 API不可用，使用演示数据');
+            this.images = this.getDemoImages();
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    // 过滤出图片文件
+    filterImages(files) {
+        if (!Array.isArray(files)) return [];
+
+        return files
+            .filter(file => this.isImageFile(file.name))
+            .map(file => ({
+                id: file.name,
+                name: file.metadata?.fileName || file.name,
+                size: file.metadata?.fileSize || 0,
+                url: `/file/${file.name}`,
+                uploadDate: new Date(file.metadata?.TimeStamp || Date.now()),
+                favorite: this.favorites.has(file.name),
+                mimeType: file.metadata?.mimeType || 'image/jpeg'
+            }))
+            .sort((a, b) => b.uploadDate - a.uploadDate); // 按上传时间倒序
+    }
+
+    // 判断是否为图片文件
+    isImageFile(filename) {
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+        const ext = filename.split('.').pop().toLowerCase();
+        return imageExtensions.includes(ext);
+    }
+
+    // 演示图片数据
+    getDemoImages() {
+        return [
+            {
+                id: 'demo_1',
+                name: '演示图片1.jpg',
+                size: 1024000,
+                url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzQyODVmNCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuekuuS+i+WbvueJhzE8L3RleHQ+PC9zdmc+',
+                uploadDate: new Date(Date.now() - 86400000),
+                favorite: false,
+                mimeType: 'image/jpeg'
+            },
+            {
+                id: 'demo_2',
+                name: '演示图片2.png',
+                size: 2048000,
+                url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzM0Yzc1OSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuekuuS+i+WbvueJhzI8L3RleHQ+PC9zdmc+',
+                uploadDate: new Date(Date.now() - 172800000),
+                favorite: true,
+                mimeType: 'image/png'
+            }
+        ];
+    }
+
+    // 加载收藏夹
+    loadFavorites() {
+        try {
+            const saved = localStorage.getItem('image_favorites');
+            if (saved) {
+                this.favorites = new Set(JSON.parse(saved));
+                console.log(`📌 加载了 ${this.favorites.size} 个收藏图片`);
+            }
+        } catch (error) {
+            console.error('❌ 加载收藏夹失败:', error);
+            this.favorites = new Set();
         }
     }
 
@@ -249,46 +304,29 @@ class TelegraphFinder {
         }
     }
 
-    getCurrentFiles() {
-        const currentFolderId = this.currentPath === '/' ? 'root' : this.currentPath;
-        const items = [];
+    // 获取当前显示的图片列表
+    getCurrentImages() {
+        let filteredImages = [...this.images];
 
-        console.log('获取当前文件夹内容:', {
-            currentPath: this.currentPath,
-            currentFolderId: currentFolderId,
-            folderStructure: this.folderStructure,
-            folders: Array.from(this.folders.keys())
-        });
-
-        // 添加当前文件夹的子文件夹
-        const children = this.folderStructure[currentFolderId] || [];
-        console.log('子文件夹ID列表:', children);
-
-        for (const childId of children) {
-            if (this.folders.has(childId)) {
-                const folder = this.folders.get(childId);
-                console.log('找到文件夹:', folder);
-                if (!folder.isSystem) {
-                    items.push({
-                        ...folder,
-                        type: 'folder',
-                        isFolder: true
-                    });
-                }
-            }
+        // 根据当前过滤器筛选
+        switch (this.currentFilter) {
+            case 'recent':
+                // 最近7天上传的图片
+                const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                filteredImages = filteredImages.filter(img => img.uploadDate > weekAgo);
+                break;
+            case 'favorites':
+                // 收藏的图片
+                filteredImages = filteredImages.filter(img => img.favorite);
+                break;
+            case 'all':
+            default:
+                // 显示所有图片
+                break;
         }
 
-        // 添加当前文件夹的文件
-        const files = this.files.filter(file => {
-            if (this.currentPath === '/') {
-                return file.parentFolder === '/' || !file.parentFolder || file.parentFolder === 'root';
-            }
-            return file.parentFolder === this.currentPath;
-        });
-
-        items.push(...files);
-        console.log('当前文件夹总项目数:', items.length, items);
-        return items;
+        console.log(`📸 当前显示 ${filteredImages.length} 张图片 (过滤器: ${this.currentFilter})`);
+        return filteredImages;
     }
 
     // 防抖渲染机制
@@ -311,10 +349,8 @@ class TelegraphFinder {
         const startTime = performance.now();
 
         try {
-            this.updateBreadcrumb();
-            this.updateNavigation();
             this.updateSidebar();
-            this.renderFiles();
+            this.renderImages();
             this.updateToolbar();
 
             const renderTime = performance.now() - startTime;
@@ -432,15 +468,15 @@ class TelegraphFinder {
         }
     }
 
-    renderFiles() {
-        const currentFiles = this.getCurrentFiles();
+    renderImages() {
+        const currentImages = this.getCurrentImages();
         const fileGrid = document.getElementById('fileGrid');
         const fileList = document.getElementById('fileList');
         const emptyState = document.getElementById('emptyState');
 
-        if (currentFiles.length === 0) {
-            // 平滑隐藏文件视图
-            this.hideFileViews();
+        if (currentImages.length === 0) {
+            // 平滑隐藏图片视图
+            this.hideImageViews();
             // 显示空状态
             setTimeout(() => {
                 emptyState.style.display = 'flex';
@@ -452,9 +488,9 @@ class TelegraphFinder {
         emptyState.style.display = 'none';
 
         if (this.viewMode === 'grid') {
-            this.switchToGridView(currentFiles);
+            this.switchToGridView(currentImages);
         } else {
-            this.switchToListView(currentFiles);
+            this.switchToListView(currentImages);
         }
     }
 
