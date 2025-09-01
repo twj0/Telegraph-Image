@@ -1624,40 +1624,6 @@ class SimpleImageViewer {
         }
     }
 
-    handleFileUpload(files) {
-        if (!files || files.length === 0) return;
-
-        Array.from(files).forEach(file => {
-            if (this.isImageFile(file.name)) {
-                this.uploadImage(file);
-            } else {
-                alert(`${file.name} 不是支持的图片格式`);
-            }
-        });
-    }
-
-    async uploadImage(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                alert('上传成功！');
-                // 重新加载图片列表
-                await this.loadImages();
-                this.renderImages();
-            } else {
-                alert('上传失败，请重试');
-            }
-        } catch (error) {
-            alert('上传失败：' + error.message);
-        }
-    }
 
     formatFileSize(bytes) {
         if (bytes === 0) return '0 B';
