@@ -380,12 +380,82 @@
                     });
                 }
 
+                // 侧边栏操作项事件
+                const actionItems = document.querySelectorAll('.action-item');
+                actionItems.forEach(item => {
+                    item.addEventListener('click', () => {
+                        const action = item.dataset.action;
+                        if (action === 'refresh') {
+                            document.getElementById('refreshBtn').click();
+                        } else if (action === 'clear-cache') {
+                            if (confirm('确定要清理缓存吗？这将刷新页面。')) {
+                                this.clearCache();
+                            }
+                        }
+                    });
+                });
+
                 // 文件输入
                 const fileInput = document.getElementById('fileInput');
                 if (fileInput) {
                     fileInput.addEventListener('change', (e) => {
                         this.handleFileUpload(e.target.files);
                     });
+                }
+
+                // 拖拽上传
+                const fileArea = document.querySelector('.file-area');
+                if (fileArea) {
+                    fileArea.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        fileArea.classList.add('drag-over');
+                    });
+
+                    fileArea.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        fileArea.classList.remove('drag-over');
+                    });
+
+                    fileArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        fileArea.classList.remove('drag-over');
+                        this.handleFileUpload(e.dataTransfer.files);
+                    });
+                }
+            }
+
+            // 清理缓存功能
+            clearCache() {
+                try {
+                    // 清理localStorage
+                    localStorage.removeItem('telegraph_image_list');
+                    localStorage.removeItem('finder_folders');
+                    localStorage.removeItem('finder_folder_structure');
+                    
+                    // 清理所有以folder_开头的项
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith('folder_')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    
+                    // 清理sessionStorage
+                    sessionStorage.clear();
+                    
+                    this.showNotification('缓存已清理，页面将自动刷新', 'success');
+                    
+                    // 延迟刷新页面
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 1500);
+                    
+                    console.log('✅ 缓存清理完成');
+                } catch (error) {
+                    console.error('❌ 清理缓存失败:', error);
+                    this.showNotification('清理缓存失败: ' + error.message, 'error');
                 }
             }
 
@@ -858,32 +928,165 @@
                 }
             }
 
-            // 显示成功消息
-            showSuccessMessage(message) {
-                // 创建成功提示
+            // 处理文件上传
+            async handleFileUpload(files) {
+                if (!files || files.length === 0) return;
+
+                // 验证文件
+                const validFiles = [];
+                const invalidFiles = [];
+
+                for (let file of files) {
+                    if (this.isImageFile(file.name)) {
+                        if (file.size <= 10 * 1024 * 1024) { // 10MB限制
+                            validFiles.push(file);
+                        } else {
+                            invalidFiles.push(`${file.name} (文件过大)`);
+                        }
+                    } else {
+                        invalidFiles.push(`${file.name} (不支持的格式)`);
+                    }
+                }
+
+                // 显示无效文件警告
+                if (invalidFiles.length > 0) {
+                    this.showNotification(`以下文件无法上传: ${invalidFiles.join(', ')}`, 'warning');
+                }
+
+                if (validFiles.length === 0) {
+                    this.showNotification('没有有效的图片文件可上传', 'error');
+                    return;
+                }
+
+                // 显示上传模态框
+                const modal = document.getElementById('uploadModal');
+                const progressContainer = document.getElementById('uploadProgress');
+                modal.style.display = 'flex';
+                progressContainer.innerHTML = '';
+
+                // 上传文件
+                for (let file of validFiles) {
+                    await this.uploadSingleFile(file, progressContainer);
+                }
+
+                // 上传完成后刷新列表
+                setTimeout(async () => {
+                    await this.loadImages(true);
+                    this.renderImages();
+                    
+                    // 3秒后关闭模态框
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                    }, 2000);
+                }, 1000);
+            }
+
+            // 单文件上传
+            async uploadSingleFile(file, container) {
+                const progressItem = document.createElement('div');
+                progressItem.innerHTML = `
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span>${file.name}</span>
+                            <span class="progress-text">准备中...</span>
+                        </div>
+                        <div style="background: #f0f0f0; border-radius: 4px; height: 8px;">
+                            <div class="progress-bar" style="background: #007aff; height: 100%; width: 0%; border-radius: 4px; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(progressItem);
+
+                const progressBar = progressItem.querySelector('.progress-bar');
+                const progressText = progressItem.querySelector('.progress-text');
+
+                try {
+                    progressText.textContent = '上传中...';
+                    progressBar.style.width = '10%';
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    // 尝试多个上传端点
+                    const uploadEndpoints = ['/upload', '../upload'];
+                    let uploadSuccess = false;
+                    let lastError = null;
+
+                    for (const endpoint of uploadEndpoints) {
+                        try {
+                            const response = await fetch(endpoint, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'Cache-Control': 'no-cache'
+                                }
+                            });
+
+                            if (response.ok) {
+                                progressBar.style.width = '100%';
+                                progressText.textContent = '上传成功';
+                                progressText.style.color = '#34c759';
+                                uploadSuccess = true;
+                                break;
+                            } else {
+                                const errorText = await response.text();
+                                lastError = new Error(`HTTP ${response.status}: ${errorText}`);
+                            }
+                        } catch (error) {
+                            lastError = error;
+                            continue;
+                        }
+                    }
+
+                    if (!uploadSuccess) {
+                        throw lastError || new Error('上传失败');
+                    }
+
+                } catch (error) {
+                    progressBar.style.background = '#ff3b30';
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '上传失败';
+                    progressText.style.color = '#ff3b30';
+                    
+                    let errorMessage = error.message;
+                    if (error.message.includes('Failed to fetch')) {
+                        errorMessage = '网络连接失败';
+                    }
+                    
+                    this.showNotification(`${file.name} 上传失败: ${errorMessage}`, 'error');
+                }
+            }
+
+            // 显示通知
+            showNotification(message, type = 'info') {
                 const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
                 notification.style.cssText = `
                     position: fixed;
                     top: 20px;
                     right: 20px;
-                    background: #34c759;
+                    background: ${type === 'success' ? '#34c759' : type === 'error' ? '#ff3b30' : type === 'warning' ? '#ff9500' : '#007aff'};
                     color: white;
-                    padding: 12px 20px;
+                    padding: 12px 16px;
                     border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-                    z-index: 10000;
-                    font-weight: 500;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 1000;
+                    max-width: 300px;
+                    word-wrap: break-word;
                 `;
                 notification.textContent = message;
-
+                
                 document.body.appendChild(notification);
-
-                // 3秒后自动移除
+                
                 setTimeout(() => {
                     if (notification.parentNode) {
-                        notification.remove();
+                        notification.parentNode.removeChild(notification);
                     }
-                }, 3000);
+                }, 4000);
+            }
+
+            showSuccessMessage(message) {
+                this.showNotification(message, 'success');
             }
 
             formatFileSize(bytes) {
