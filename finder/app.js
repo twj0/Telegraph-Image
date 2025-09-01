@@ -470,7 +470,6 @@ class SimpleImageViewer {
     renderImages() {
         const currentImages = this.getCurrentImages();
         const fileGrid = document.getElementById('fileGrid');
-        const fileList = document.getElementById('fileList');
         const emptyState = document.getElementById('emptyState');
 
         if (currentImages.length === 0) {
@@ -1627,10 +1626,15 @@ class SimpleImageViewer {
     }
 
     downloadImage(image) {
-        const a = document.createElement('a');
-        a.href = image.url;
-        a.download = image.name;
-        a.click();
+        const link = document.createElement('a');
+        link.href = image.url;
+        link.download = image.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        this.showNotification('开始下载图片', 'info');
     }
 
     async deleteImage(imageId) {
@@ -1712,4 +1716,426 @@ document.addEventListener('DOMContentLoaded', () => {
 // 全局函数（供HTML调用）
 function closeUploadModal() {
     document.getElementById('uploadModal').style.display = 'none';
+}
+
+// 处理文件上传 - 使用后台软进度条
+async function handleFileUpload(files) {
+    if (!files || files.length === 0) return;
+
+    // 导入配置
+    const { CONFIG, Utils } = await import('./config.js');
+
+    // 验证文件
+    const validFiles = [];
+    const invalidFiles = [];
+
+    for (let file of files) {
+        if (Utils.isValidImageFile(file.name)) {
+            if (Utils.isValidFileSize(file.size)) {
+                validFiles.push(file);
+            } else {
+                invalidFiles.push(`${file.name} (文件过大，限制${Utils.formatFileSize(CONFIG.UPLOAD.MAX_FILE_SIZE)})`);
+            }
+        } else {
+            invalidFiles.push(`${file.name} (不支持的格式)`);
+        }
+    }
+
+    // 显示无效文件警告
+    if (invalidFiles.length > 0) {
+        finder.showNotification(`以下文件无法上传: ${invalidFiles.join(', ')}`, 'warning');
+    }
+
+    if (validFiles.length === 0) {
+        finder.showNotification('没有有效的图片文件可上传', 'error');
+        return;
+    }
+
+    // 使用后台上传
+    for (let file of validFiles) {
+        finder.createBackgroundUploadTask(file);
+    }
+}
+
+// 创建后台上传任务
+function createBackgroundUploadTask(file) {
+    const container = document.getElementById('backgroundUploadContainer');
+    const taskId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    
+    const taskElement = document.createElement('div');
+    taskElement.className = 'upload-task';
+    taskElement.id = taskId;
+    taskElement.innerHTML = `
+        <div class="upload-task-header">
+            <div class="upload-task-info">
+                <div class="upload-task-name" title="${file.name}">${file.name}</div>
+                <div class="upload-task-status">准备上传...</div>
+            </div>
+            <button class="upload-task-close" onclick="app.cancelUploadTask('${taskId}')">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="upload-progress-bar">
+            <div class="upload-progress-fill" style="width: 0%"></div>
+        </div>
+    `;
+    
+    container.appendChild(taskElement);
+    
+    // 开始上传
+    finder.performBackgroundUpload(file, taskId);
+}
+
+// 执行后台上传
+async function performBackgroundUpload(file, taskId) {
+    const taskElement = document.getElementById(taskId);
+    const statusElement = taskElement.querySelector('.upload-task-status');
+    const progressFill = taskElement.querySelector('.upload-progress-fill');
+    
+    try {
+        statusElement.textContent = '上传中...';
+        
+        // 模拟上传进度
+        for (let i = 0; i <= 90; i += 10) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            progressFill.style.width = i + '%';
+            statusElement.textContent = `上传中... ${i}%`;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // 尝试多个上传端点
+        const endpoints = ['/upload', '../upload', '/functions/upload'];
+        let uploadSuccess = false;
+        let lastError = null;
+
+        for (const endpoint of endpoints) {
+            try {
+                const response = await fetch(endpoint + '?t=' + Date.now(), {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    uploadSuccess = true;
+                    
+                    // 上传成功
+                    progressFill.style.width = '100%';
+                    statusElement.textContent = '上传完成';
+                    taskElement.classList.add('success');
+                    
+                    finder.showNotification(`${file.name} 上传成功！`, 'success');
+                    
+                    // 刷新图片列表
+                    setTimeout(async () => {
+                        await finder.loadImages(true);
+                        finder.renderImages();
+                    }, 1000);
+                    
+                    break;
+                }
+            } catch (error) {
+                lastError = error;
+                continue;
+            }
+        }
+
+        if (!uploadSuccess) {
+            throw lastError || new Error('所有上传端点都失败');
+        }
+
+    } catch (error) {
+        console.error('❌ 上传失败:', error);
+        
+        // 上传失败
+        progressFill.style.width = '100%';
+        statusElement.textContent = '上传失败';
+        taskElement.classList.add('error');
+        
+        finder.showNotification(`${file.name} 上传失败: ${error.message}`, 'error');
+    }
+    
+    // 3秒后自动移除任务
+    setTimeout(() => {
+        taskElement.classList.add('completed');
+        setTimeout(() => {
+            if (taskElement.parentNode) {
+                taskElement.parentNode.removeChild(taskElement);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// 取消上传任务
+function cancelUploadTask(taskId) {
+    const taskElement = document.getElementById(taskId);
+    if (taskElement) {
+        taskElement.classList.add('completed');
+        setTimeout(() => {
+            if (taskElement.parentNode) {
+                taskElement.parentNode.removeChild(taskElement);
+            }
+        }, 300);
+    }
+}
+
+// 初始化右键菜单
+function initContextMenu() {
+    const contextMenu = document.getElementById('contextMenu');
+    let currentImageItem = null;
+
+    // 监听右键点击
+    document.addEventListener('contextmenu', (e) => {
+        const imageItem = e.target.closest('.image-item');
+        if (imageItem) {
+            e.preventDefault();
+            currentImageItem = imageItem;
+            finder.showContextMenu(e.pageX, e.pageY, imageItem);
+        } else {
+            finder.hideContextMenu();
+        }
+    });
+
+    // 监听点击其他地方隐藏菜单
+    document.addEventListener('click', () => {
+        finder.hideContextMenu();
+    });
+
+    // 监听ESC键隐藏菜单
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            finder.hideContextMenu();
+        }
+    });
+}
+
+// 显示右键菜单
+async function showContextMenu(x, y, imageItem) {
+    const { CONFIG } = await import('./config.js');
+    const contextMenu = document.getElementById('contextMenu');
+    const imageData = JSON.parse(imageItem.dataset.image);
+    
+    // 清除之前的选中状态
+    document.querySelectorAll('.image-item.context-selected').forEach(item => {
+        item.classList.remove('context-selected');
+    });
+    
+    // 标记当前选中项
+    imageItem.classList.add('context-selected');
+    
+    // 生成菜单项
+    contextMenu.innerHTML = CONFIG.CONTEXT_MENU.ITEMS.map(item => {
+        if (item.type === 'separator') {
+            return '<div class="context-menu-separator"></div>';
+        }
+        
+        const dangerClass = item.danger ? ' danger' : '';
+        return `
+            <div class="context-menu-item${dangerClass}" data-action="${item.action}">
+                <i class="${item.icon}"></i>
+                ${item.label}
+            </div>
+        `;
+    }).join('');
+    
+    // 绑定菜单项点击事件
+    contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = item.dataset.action;
+            finder.handleContextMenuAction(action, imageData, imageItem);
+            finder.hideContextMenu();
+        });
+    });
+    
+    // 定位菜单
+    contextMenu.style.left = x + 'px';
+    contextMenu.style.top = y + 'px';
+    contextMenu.classList.add('show');
+    
+    // 确保菜单不超出屏幕
+    const rect = contextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        contextMenu.style.left = (x - rect.width) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        contextMenu.style.top = (y - rect.height) + 'px';
+    }
+}
+
+// 隐藏右键菜单
+function hideContextMenu() {
+    const contextMenu = document.getElementById('contextMenu');
+    contextMenu.classList.remove('show');
+    
+    // 清除选中状态
+    document.querySelectorAll('.image-item.context-selected').forEach(item => {
+        item.classList.remove('context-selected');
+    });
+}
+
+// 处理右键菜单动作
+async function handleContextMenuAction(action, imageData, imageItem) {
+    const { Utils } = await import('./config.js');
+    
+    switch (action) {
+        case 'preview':
+            finder.previewImage(imageData);
+            break;
+            
+        case 'copyLink':
+            const success = await Utils.copyToClipboard(imageData.url);
+            finder.showNotification(success ? '链接已复制到剪贴板' : '复制失败', success ? 'success' : 'error');
+            break;
+            
+        case 'copyMarkdown':
+            const markdown = `![${imageData.name}](${imageData.url})`;
+            const mdSuccess = await Utils.copyToClipboard(markdown);
+            finder.showNotification(mdSuccess ? 'Markdown已复制到剪贴板' : '复制失败', mdSuccess ? 'success' : 'error');
+            break;
+            
+        case 'copyHtml':
+            const html = `<img src="${imageData.url}" alt="${imageData.name}" />`;
+            const htmlSuccess = await Utils.copyToClipboard(html);
+            finder.showNotification(htmlSuccess ? 'HTML已复制到剪贴板' : '复制失败', htmlSuccess ? 'success' : 'error');
+            break;
+            
+        case 'download':
+            finder.downloadImage(imageData);
+            break;
+            
+        case 'toggleFavorite':
+            finder.toggleFavorite(imageData, imageItem);
+            break;
+            
+        case 'rename':
+            finder.renameImage(imageData, imageItem);
+            break;
+            
+        case 'move':
+            finder.moveImage(imageData);
+            break;
+            
+        case 'delete':
+            finder.deleteImage(imageData, imageItem);
+            break;
+    }
+}
+
+// 预览图片
+function previewImage(imageData) {
+    const modal = document.getElementById('previewModal');
+    const img = document.getElementById('previewImage');
+    const info = document.getElementById('previewImageInfo');
+    
+    img.src = imageData.url;
+    img.alt = imageData.name;
+    
+    info.innerHTML = `
+        <strong>文件名:</strong> ${imageData.name}<br>
+        <strong>大小:</strong> ${imageData.size ? finder.formatFileSize(imageData.size) : '未知'}<br>
+        <strong>上传时间:</strong> ${imageData.uploadDate ? new Date(imageData.uploadDate).toLocaleString() : '未知'}<br>
+        <strong>链接:</strong> <code>${imageData.url}</code>
+    `;
+    
+    // 使用Bootstrap模态框
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+// 下载图片
+function downloadImage(imageData) {
+    const link = document.createElement('a');
+    link.href = imageData.url;
+    link.download = imageData.name;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    finder.showNotification('开始下载图片', 'info');
+}
+
+// 切换收藏状态
+function toggleFavorite(imageData, imageItem) {
+    imageData.favorite = !imageData.favorite;
+    
+    // 更新UI
+    const favoriteIcon = imageItem.querySelector('.favorite-mark');
+    if (imageData.favorite) {
+        if (!favoriteIcon) {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-star favorite-mark';
+            imageItem.appendChild(icon);
+        }
+        finder.showNotification('已添加到收藏', 'success');
+    } else {
+        if (favoriteIcon) {
+            favoriteIcon.remove();
+        }
+        finder.showNotification('已从收藏中移除', 'info');
+    }
+    
+    // 保存到本地存储
+    finder.saveFavorites();
+}
+
+// 重命名图片
+function renameImage(imageData, imageItem) {
+    const newName = prompt('请输入新的文件名:', imageData.name);
+    if (newName && newName.trim() && newName !== imageData.name) {
+        imageData.name = newName.trim();
+        
+        // 更新UI
+        const nameElement = imageItem.querySelector('.image-name');
+        if (nameElement) {
+            nameElement.textContent = imageData.name;
+        }
+        
+        finder.showNotification('文件已重命名', 'success');
+    }
+}
+
+// 移动图片
+function moveImage(imageData) {
+    finder.showNotification('移动功能开发中...', 'info');
+}
+
+// 删除图片
+function deleteImage(imageData, imageItem) {
+    if (confirm(`确定要删除图片 "${imageData.name}" 吗？`)) {
+        // 从列表中移除
+        const index = finder.images.findIndex(f => f.id === imageData.id);
+        if (index > -1) {
+            finder.images.splice(index, 1);
+        }
+        
+        // 从UI中移除
+        imageItem.remove();
+        
+        finder.showNotification('图片已删除', 'success');
+    }
+}
+
+// 保存收藏状态
+function saveFavorites() {
+    const favorites = finder.images.filter(f => f.favorite).map(f => f.id);
+    localStorage.setItem('telegraph_favorites', JSON.stringify(favorites));
+}
+
+// 加载收藏状态
+function loadFavorites() {
+    try {
+        const favorites = JSON.parse(localStorage.getItem('telegraph_favorites') || '[]');
+        finder.images.forEach(file => {
+            file.favorite = favorites.includes(file.id);
+        });
+    } catch (error) {
+        console.warn('加载收藏状态失败:', error);
+    }
 }
