@@ -849,107 +849,73 @@ class SimpleImageViewer {
     }
 
     async handleFileUpload(files) {
-        if (files.length === 0) return;
+        if (!files || files.length === 0) return;
 
-        const modal = document.getElementById('uploadModal');
-        const progressContainer = document.getElementById('uploadProgress');
+        // 验证文件
+        const validFiles = [];
+        const invalidFiles = [];
 
-        modal.style.display = 'flex';
-        progressContainer.innerHTML = '';
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            await this.uploadSingleFile(file, progressContainer);
+        for (let file of files) {
+            if (this.isImageFile(file.name)) {
+                if (file.size <= 50 * 1024 * 1024) { // 50MB限制
+                    validFiles.push(file);
+                } else {
+                    invalidFiles.push(`${file.name} (文件过大，限制50MB)`);
+                }
+            } else {
+                invalidFiles.push(`${file.name} (不支持的格式)`);
+            }
         }
 
-        // 上传完成后刷新文件列表
-        await this.loadFiles();
-        this.render();
+        // 显示无效文件警告
+        if (invalidFiles.length > 0) {
+            this.showNotification(`以下文件无法上传: ${invalidFiles.join(', ')}`, 'warning');
+        }
 
-        // 3秒后关闭模态框
-        setTimeout(() => {
-            modal.style.display = 'none';
-        }, 3000);
+        if (validFiles.length === 0) {
+            this.showNotification('没有有效的图片文件可上传', 'error');
+            return;
+        }
+
+        // 逐个上传文件
+        for (let file of validFiles) {
+            await this.uploadImage(file);
+        }
     }
 
-    async uploadSingleFile(file, container) {
-        const progressItem = document.createElement('div');
-        progressItem.innerHTML = `
-            <div style="margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span>${file.name}</span>
-                    <span class="progress-text">0%</span>
-                </div>
-                <div style="background: #f0f0f0; border-radius: 4px; height: 8px;">
-                    <div class="progress-bar" style="background: #007aff; height: 100%; width: 0%; border-radius: 4px; transition: width 0.3s ease;"></div>
-                </div>
-            </div>
-        `;
-        container.appendChild(progressItem);
-
-        const progressBar = progressItem.querySelector('.progress-bar');
-        const progressText = progressItem.querySelector('.progress-text');
+    async uploadImage(file) {
+        console.log('📤 开始上传图片:', file.name);
+        
+        const formData = new FormData();
+        formData.append('file', file);
 
         try {
-            // 模拟上传进度
-            for (let i = 0; i <= 90; i += 10) {
-                await new Promise(resolve => setTimeout(resolve, 100));
-                progressBar.style.width = i + '%';
-                progressText.textContent = i + '%';
-            }
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
 
-            // 尝试使用Telegraph的上传API
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                // 如果在文件夹中，添加文件夹ID
-                if (this.currentPath !== '/') {
-                    formData.append('folderId', this.currentPath);
-                }
-
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    progressBar.style.width = '100%';
-                    progressText.textContent = '完成';
-                    progressText.style.color = '#34c759';
-                    this.showNotification(`${file.name} 上传成功`, 'success');
-
-                    console.log('✅ 文件上传成功:', result);
-                } else {
-                    throw new Error(`上传失败: ${response.status}`);
-                }
-            } catch (apiError) {
-                console.log('🎭 Telegraph API不可用，使用演示模式');
-                progressBar.style.width = '100%';
-                progressText.textContent = '完成 (演示)';
-                progressText.style.color = '#34c759';
-                this.showNotification(`${file.name} 上传成功 (演示模式)`, 'success');
-
-                // 添加到本地文件列表用于演示
-                const mockFile = {
-                    id: 'mock_' + Date.now(),
-                    name: file.name,
-                    size: file.size,
-                    type: this.getFileType(file.name),
-                    url: URL.createObjectURL(file),
-                    uploadDate: new Date(),
-                    parentFolder: this.currentPath === '/' ? 'root' : this.currentPath,
-                    favorite: false
-                };
-                this.files.unshift(mockFile);
+            if (response.ok) {
+                const result = await response.json();
+                console.log('✅ 上传成功:', result);
+                this.showNotification(`图片 "${file.name}" 上传成功！`, 'success');
+                
+                // 等待1秒确保服务器处理完成
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // 强制刷新图片列表
+                await this.loadImages(true);
+                this.renderImages();
+                
+                console.log('🔄 图片列表已刷新');
+            } else {
+                const errorText = await response.text();
+                console.error('❌ 上传失败:', response.status, errorText);
+                this.showNotification(`上传失败: ${response.status} ${errorText}`, 'error');
             }
         } catch (error) {
-            console.error('❌ 上传文件失败:', error);
-            progressBar.style.background = '#ff3b30';
-            progressText.textContent = '失败';
-            progressText.style.color = '#ff3b30';
-            this.showNotification(`${file.name} 上传失败`, 'error');
+            console.error('❌ 上传异常:', error);
+            this.showNotification('上传失败：' + error.message, 'error');
         }
     }
 
@@ -1705,12 +1671,14 @@ class SimpleImageViewer {
 // 启动应用
 const imageViewer = new SimpleImageViewer();
 
-// 全局变量
+// 全局变量，用于HTML中的onclick调用
 let finder;
+window.app = null;
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
     finder = new TelegraphFinder();
+    window.app = finder;
 });
 
 // 全局函数（供HTML调用）
