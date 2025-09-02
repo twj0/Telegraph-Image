@@ -832,71 +832,118 @@
             handleFileUpload(files) {
                 if (!files || files.length === 0) return;
 
-                Array.from(files).forEach(file => {
+                const validFiles = Array.from(files).filter(file => {
                     if (this.isImageFile(file.name)) {
-                        this.uploadImage(file);
-                    } else {
-                        alert(`${file.name} 不是支持的图片格式`);
+                        // 可以在这里添加文件大小校验
+                        return true;
                     }
+                    this.showNotification(`${file.name} (不支持的格式)`, 'warning');
+                    return false;
                 });
+
+                if (validFiles.length === 0) {
+                    this.showNotification('没有有效的图片文件可上传', 'error');
+                    return;
+                }
+
+                // 使用后台上传
+                for (let file of validFiles) {
+                    this.createBackgroundUploadTask(file);
+                }
             }
 
-            async uploadImage(file) {
-                console.log('📤 开始上传图片:', file.name);
+            createBackgroundUploadTask(file) {
+                const container = document.getElementById('backgroundUploadContainer');
+                const taskId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
+                const taskElement = document.createElement('div');
+                taskElement.className = 'upload-task';
+                taskElement.id = taskId;
+                taskElement.innerHTML = `
+                    <div class="upload-task-header">
+                        <div class="upload-task-info">
+                            <div class="upload-task-name" title="${file.name}">${file.name}</div>
+                            <div class="upload-task-status">准备上传...</div>
+                        </div>
+                        <button class="upload-task-close" onclick="imageViewer.cancelUploadTask('${taskId}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="upload-progress-bar">
+                        <div class="upload-progress-fill" style="width: 0%"></div>
+                    </div>
+                `;
+                
+                container.appendChild(taskElement);
+                
+                // 开始上传
+                this.performBackgroundUpload(file, taskId);
+            }
 
-                const formData = new FormData();
-                formData.append('file', file);
+            async performBackgroundUpload(file, taskId) {
+                const taskElement = document.getElementById(taskId);
+                if (!taskElement) return;
 
+                const statusElement = taskElement.querySelector('.upload-task-status');
+                const progressFill = taskElement.querySelector('.upload-progress-fill');
+                
                 try {
-                    // 尝试多个上传端点
-                    const uploadEndpoints = ['/upload', '../upload'];
-                    let uploadSuccess = false;
-                    let lastError = null;
-
-                    for (const endpoint of uploadEndpoints) {
-                        try {
-                            const response = await fetch(endpoint, {
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'Cache-Control': 'no-cache'
-                                }
-                            });
-
-                            if (response.ok) {
-                                this.showNotification(`图片 "${file.name}" 上传成功！`, 'success');
-                                uploadSuccess = true;
-                                
-                                // 等待1秒确保服务器处理完成
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                                
-                                // 强制刷新图片列表
-                                await this.loadImages(true);
-                                this.renderImages();
-                                
-                                console.log('🔄 图片列表已刷新');
-                                break;
-                            } else {
-                                const errorText = await response.text();
-                                lastError = new Error(`HTTP ${response.status}: ${errorText}`);
-                            }
-                        } catch (error) {
-                            lastError = error;
-                            continue;
-                        }
+                    statusElement.textContent = '上传中...';
+                    
+                    // 模拟软进度条
+                    for (let i = 0; i <= 90; i += 10) {
+                        await new Promise(resolve => setTimeout(resolve, 150));
+                        if (!document.getElementById(taskId)) return; // 任务可能已被取消
+                        progressFill.style.width = i + '%';
+                        statusElement.textContent = `上传中... ${i}%`;
                     }
 
-                    if (!uploadSuccess) {
-                        throw lastError || new Error('所有上传端点均失败');
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        progressFill.style.width = '100%';
+                        statusElement.textContent = '上传完成';
+                        taskElement.classList.add('success');
+                        
+                        this.showNotification(`${file.name} 上传成功！`, 'success');
+                        
+                        setTimeout(async () => {
+                            await this.loadImages(true);
+                            this.renderImages();
+                        }, 1000);
+                        
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
                     }
 
                 } catch (error) {
-                    let errorMessage = error.message;
-                    if (error.message.includes('Failed to fetch')) {
-                        errorMessage = '网络连接失败';
+                    if (!document.getElementById(taskId)) return;
+                    progressFill.style.width = '100%';
+                    statusElement.textContent = '上传失败';
+                    taskElement.classList.add('error');
+                    this.showNotification(`${file.name} 上传失败: ${error.message}`, 'error');
+                }
+                
+                // 3秒后自动移除任务
+                setTimeout(() => {
+                    if (taskElement) {
+                        taskElement.classList.add('completed');
+                        setTimeout(() => taskElement.remove(), 300);
                     }
-                    
-                    this.showNotification(`${file.name} 上传失败: ${errorMessage}`, 'error');
+                }, 3000);
+            }
+
+            cancelUploadTask(taskId) {
+                const taskElement = document.getElementById(taskId);
+                if (taskElement) {
+                    taskElement.remove();
+                    this.showNotification('上传已取消', 'info');
                 }
             }
 
