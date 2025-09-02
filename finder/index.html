@@ -703,83 +703,59 @@
                 const image = this.images.find(img => img.id === imageId);
                 if (!image) return;
 
-                // 创建右键菜单
-                this.removeExistingContextMenu();
-
-                const contextMenu = document.createElement('div');
-                contextMenu.className = 'context-menu';
-                contextMenu.style.cssText = `
-                    position: fixed;
-                    background: white;
-                    border-radius: 8px;
-                    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-                    border: 1px solid #e5e5e7;
-                    padding: 4px 0;
-                    min-width: 160px;
-                    z-index: 1001;
-                    left: ${e.pageX}px;
-                    top: ${e.pageY}px;
-                `;
-
-                contextMenu.innerHTML = `
-                    <div class="menu-item" data-action="copy" style="padding: 8px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-link"></i>
-                        <span>复制链接</span>
-                    </div>
-                    <div class="menu-item" data-action="download" style="padding: 8px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-download"></i>
-                        <span>下载图片</span>
-                    </div>
-                    <div style="height: 1px; background: #e5e5e7; margin: 4px 0;"></div>
-                    <div class="menu-item" data-action="delete" style="padding: 8px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; color: #ff3b30;">
-                        <i class="fas fa-trash"></i>
-                        <span>删除图片</span>
-                    </div>
-                `;
-
-                // 添加悬停效果和点击事件
-                const menuItems = contextMenu.querySelectorAll('.menu-item');
-                menuItems.forEach(item => {
-                    item.addEventListener('mouseenter', () => {
-                        item.style.background = '#f0f0f0';
-                    });
-                    item.addEventListener('mouseleave', () => {
-                        item.style.background = 'transparent';
-                    });
-
-                    item.addEventListener('click', () => {
-                        const action = item.dataset.action;
-                        this.handleContextMenuAction(action, image, imageId);
-                        this.removeExistingContextMenu();
-                    });
-                });
-
-                document.body.appendChild(contextMenu);
-
-                // 确保菜单不超出屏幕
-                const rect = contextMenu.getBoundingClientRect();
-                if (rect.right > window.innerWidth) {
-                    contextMenu.style.left = (e.pageX - rect.width) + 'px';
-                }
-                if (rect.bottom > window.innerHeight) {
-                    contextMenu.style.top = (e.pageY - rect.height) + 'px';
-                }
-
-                // 点击其他地方关闭菜单
-                setTimeout(() => {
-                    document.addEventListener('click', this.closeContextMenu.bind(this), { once: true });
-                }, 0);
-            }
-
-            removeExistingContextMenu() {
+                // 移除已存在的菜单
                 const existingMenu = document.querySelector('.context-menu');
                 if (existingMenu) {
                     existingMenu.remove();
                 }
-            }
 
-            closeContextMenu() {
-                this.removeExistingContextMenu();
+                // 创建新的菜单
+                const contextMenu = document.createElement('div');
+                contextMenu.className = 'context-menu';
+                contextMenu.id = 'contextMenu'; // 确保ID存在以便CSS选择器工作
+                
+                contextMenu.innerHTML = `
+                    <div class="context-menu-item" data-action="copy">
+                        <i class="fas fa-link"></i> 复制链接
+                    </div>
+                    <div class="context-menu-item" data-action="download">
+                        <i class="fas fa-download"></i> 下载图片
+                    </div>
+                    <div class="context-menu-separator"></div>
+                    <div class="context-menu-item danger" data-action="delete">
+                        <i class="fas fa-trash"></i> 删除图片
+                    </div>
+                `;
+
+                document.body.appendChild(contextMenu);
+                
+                // 定位菜单
+                contextMenu.style.left = `${e.pageX}px`;
+                contextMenu.style.top = `${e.pageY}px`;
+                contextMenu.classList.add('show');
+
+                // 确保菜单在屏幕内
+                const rect = contextMenu.getBoundingClientRect();
+                if (rect.right > window.innerWidth) {
+                    contextMenu.style.left = `${e.pageX - rect.width}px`;
+                }
+                if (rect.bottom > window.innerHeight) {
+                    contextMenu.style.top = `${e.pageY - rect.height}px`;
+                }
+
+                // 绑定事件
+                contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const action = item.dataset.action;
+                        this.handleContextMenuAction(action, image, imageId);
+                        contextMenu.remove();
+                    });
+                });
+
+                // 点击其他地方关闭
+                setTimeout(() => {
+                    document.addEventListener('click', () => contextMenu.remove(), { once: true });
+                }, 0);
             }
 
             handleContextMenuAction(action, image, imageId) {
