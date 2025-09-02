@@ -62,7 +62,6 @@ class SimpleImageViewer {
         const fileInput = document.getElementById('fileInput');
         if (fileInput) {
             fileInput.addEventListener('change', (e) => {
-                this.handleFileUpload(e.target.files);
             });
         }
     }
@@ -1633,9 +1632,6 @@ class SimpleImageViewer {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 }
-
-// 启动应用
-const imageViewer = new SimpleImageViewer();
 
 // 全局变量，用于HTML中的onclick调用
 let finder;

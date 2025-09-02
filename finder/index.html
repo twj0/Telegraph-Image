@@ -880,12 +880,6 @@
                 formData.append('file', file);
 
                 try {
-                    progressText.textContent = '上传中...';
-                    progressBar.style.width = '10%';
-
-                    const formData = new FormData();
-                    formData.append('file', file);
-
                     // 尝试多个上传端点
                     const uploadEndpoints = ['/upload', '../upload'];
                     let uploadSuccess = false;
@@ -902,10 +896,17 @@
                             });
 
                             if (response.ok) {
-                                progressBar.style.width = '100%';
-                                progressText.textContent = '上传成功';
-                                progressText.style.color = '#34c759';
+                                this.showNotification(`图片 "${file.name}" 上传成功！`, 'success');
                                 uploadSuccess = true;
+                                
+                                // 等待1秒确保服务器处理完成
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                
+                                // 强制刷新图片列表
+                                await this.loadImages(true);
+                                this.renderImages();
+                                
+                                console.log('🔄 图片列表已刷新');
                                 break;
                             } else {
                                 const errorText = await response.text();
@@ -918,15 +919,10 @@
                     }
 
                     if (!uploadSuccess) {
-                        throw lastError || new Error('上传失败');
+                        throw lastError || new Error('所有上传端点均失败');
                     }
 
                 } catch (error) {
-                    progressBar.style.background = '#ff3b30';
-                    progressBar.style.width = '100%';
-                    progressText.textContent = '上传失败';
-                    progressText.style.color = '#ff3b30';
-                    
                     let errorMessage = error.message;
                     if (error.message.includes('Failed to fetch')) {
                         errorMessage = '网络连接失败';
