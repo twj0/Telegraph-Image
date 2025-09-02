@@ -50,6 +50,20 @@ The only thing you need to prepare in advance is a Cloudflare account
 
 4. Support image review API, can be opened as needed, after opening undesirable images will be automatically blocked, no longer loaded
 
+### Finder Feature
+
+We are excited to announce a comprehensive secondary development of our image management feature, introducing a brand-new `finder` interface. This interface is not only more modern visually but also brings many practical new features designed to enhance your image management experience.
+
+![Finder Feature Screenshot](finderhome.png)
+
+**Key features include:**
+
+*   **Modern File Management Interface**: We have redesigned the entire interface to be more intuitive and user-friendly. Now, you can browse and manage your images more easily.
+*   **Background Uploads with Soft Progress Bars**: We have introduced a background upload feature that supports concurrent uploads of multiple files. The upload process is displayed via a non-blocking "soft" progress bar in the bottom right corner, allowing you to continue browsing and managing other images without waiting.
+*   **Right-Click Context Menu**: To improve operational efficiency, we have added a right-click context menu for each image. Now, you can simply right-click on any image to quickly access common functions like copying links, downloading, and deleting.
+
+We believe these improvements will make managing your images much more convenient.
+
 ### Add custom domains
 
 Inside the custom domain of pages, bind the domain name that exists in your Cloudflare account, the domain name hosted in cloudflare, will automatically modify the dns record
