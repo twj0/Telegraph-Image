@@ -4,14 +4,86 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const cors = require('cors');
+const session = require('express-session');
+
+// 导入认证相关模块
+const dbManager = require('./utils/database');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 初始化数据库
+async function initializeDatabase() {
+    try {
+        await dbManager.initialize();
+    } catch (error) {
+        console.error('❌ 数据库初始化失败，服务器无法启动:', error);
+        process.exit(1);
+    }
+}
+
+// 会话配置
+const sessionConfig = {
+    secret: process.env.SESSION_SECRET || 'telegraph-finder-secret-key-' + Math.random().toString(36),
+    resave: false,
+    saveUninitialized: false,
+    name: 'finder.sid',
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // 生产环境启用HTTPS
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24小时
+        sameSite: 'lax'
+    }
+};
+
 // 中间件
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+app.use(express.urlencoded({ extended: true }));
+app.use(session(sessionConfig));
+
+// ==================== 认证路由 ====================
+
+// 登录页面 (GET)
+app.get('/finder/login', authMiddleware.redirectIfAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'login.html'));
+});
+
+// 登录处理 (POST)
+app.post('/finder/login',
+    authMiddleware.validateLoginInput,
+    authMiddleware.handleLogin
+);
+
+// 登出处理
+app.get('/finder/logout', authMiddleware.handleLogout);
+
+// 获取当前用户信息
+app.get('/finder/api/user', authMiddleware.getCurrentUser);
+
+// 健康检查端点（无需认证）
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        version: require('./package.json').version
+    });
+});
+
+// 受保护的主页面
+app.get('/finder', authMiddleware.requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ==================== 静态文件服务 ====================
+
+// 静态文件服务（排除受保护的路径）
+app.use('/finder/assets', express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname), {
+    index: false // 禁用自动index.html
+}));
 
 // 文件存储配置
 const storage = multer.diskStorage({
@@ -55,10 +127,10 @@ const upload = multer({
 // 文件元数据存储（实际项目中应使用数据库）
 let fileMetadata = new Map();
 
-// API 路由
+// ==================== 受保护的API路由 ====================
 
-// 获取文件列表
-app.get('/api/manage/list', async (req, res) => {
+// 获取文件列表 (需要认证)
+app.get('/api/manage/list', authMiddleware.requireAuth, async (req, res) => {
     try {
         const uploadsDir = path.join(__dirname, 'uploads');
         
@@ -104,8 +176,8 @@ app.get('/api/manage/list', async (req, res) => {
     }
 });
 
-// 上传文件
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+// 上传文件 (需要认证)
+app.post('/api/upload', authMiddleware.requireAuth, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: '没有上传文件' });
@@ -140,8 +212,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-// 获取文件
-app.get('/file/:filename', async (req, res) => {
+// 获取文件 (需要认证)
+app.get('/file/:filename', authMiddleware.requireAuth, async (req, res) => {
     try {
         const filename = req.params.filename;
         const filePath = path.join(__dirname, 'uploads', filename);
@@ -168,8 +240,8 @@ app.get('/file/:filename', async (req, res) => {
     }
 });
 
-// 删除文件
-app.delete('/api/file/:filename', async (req, res) => {
+// 删除文件 (需要认证)
+app.delete('/api/file/:filename', authMiddleware.requireAuth, async (req, res) => {
     try {
         const filename = req.params.filename;
         const filePath = path.join(__dirname, 'uploads', filename);
@@ -187,8 +259,8 @@ app.delete('/api/file/:filename', async (req, res) => {
     }
 });
 
-// 重命名文件
-app.put('/api/file/:filename/rename', async (req, res) => {
+// 重命名文件 (需要认证)
+app.put('/api/file/:filename/rename', authMiddleware.requireAuth, async (req, res) => {
     try {
         const filename = req.params.filename;
         const { newName } = req.body;
@@ -209,8 +281,8 @@ app.put('/api/file/:filename/rename', async (req, res) => {
     }
 });
 
-// 移动文件到文件夹
-app.put('/api/file/:filename/move', async (req, res) => {
+// 移动文件到文件夹 (需要认证)
+app.put('/api/file/:filename/move', authMiddleware.requireAuth, async (req, res) => {
     try {
         const filename = req.params.filename;
         const { parentFolder } = req.body;
@@ -227,8 +299,8 @@ app.put('/api/file/:filename/move', async (req, res) => {
     }
 });
 
-// 切换文件收藏状态
-app.put('/api/file/:filename/favorite', async (req, res) => {
+// 切换文件收藏状态 (需要认证)
+app.put('/api/file/:filename/favorite', authMiddleware.requireAuth, async (req, res) => {
     try {
         const filename = req.params.filename;
         const { liked } = req.body;
@@ -245,8 +317,8 @@ app.put('/api/file/:filename/favorite', async (req, res) => {
     }
 });
 
-// 获取文件夹列表
-app.get('/api/folders', (req, res) => {
+// 获取文件夹列表 (需要认证)
+app.get('/api/folders', authMiddleware.requireAuth, (req, res) => {
     const folders = new Set();
     
     // 从文件元数据中提取所有文件夹
@@ -259,8 +331,8 @@ app.get('/api/folders', (req, res) => {
     res.json(Array.from(folders));
 });
 
-// 创建文件夹（虚拟文件夹，不在文件系统中创建实际目录）
-app.post('/api/folders', (req, res) => {
+// 创建文件夹 (需要认证)（虚拟文件夹，不在文件系统中创建实际目录）
+app.post('/api/folders', authMiddleware.requireAuth, (req, res) => {
     const { name, parentFolder = '/' } = req.body;
     
     if (!name) {
@@ -298,19 +370,31 @@ app.use((req, res) => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
-    console.log(`Telegraph Finder 服务器运行在 http://localhost:${PORT}`);
-    console.log('前端界面: http://localhost:' + PORT);
-    console.log('API 文档: http://localhost:' + PORT + '/api');
+async function startServer() {
+    await initializeDatabase();
+
+    app.listen(PORT, () => {
+        console.log(`Telegraph Finder 服务器运行在 http://localhost:${PORT}`);
+        console.log('🔐 登录页面: http://localhost:' + PORT + '/finder/login');
+        console.log('📁 文件管理: http://localhost:' + PORT + '/finder');
+        console.log('API 文档: http://localhost:' + PORT + '/api');
+    });
+}
+
+startServer().catch(error => {
+    console.error('❌ 服务器启动失败:', error);
+    process.exit(1);
 });
 
 // 优雅关闭
 process.on('SIGTERM', () => {
     console.log('收到 SIGTERM 信号，正在关闭服务器...');
+    dbManager.close();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     console.log('收到 SIGINT 信号，正在关闭服务器...');
+    dbManager.close();
     process.exit(0);
 });
