@@ -88,10 +88,14 @@
             width: 100% !important;
             height: 100% !important;
             background: rgba(0, 0, 0, 0.5) !important;
-            display: flex !important;
+            display: none !important;
             align-items: center !important;
             justify-content: center !important;
             z-index: 1000 !important;
+        }
+
+        .modal.show {
+            display: flex !important;
         }
 
         .modal-content {
@@ -402,7 +406,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>新建文件夹</h3>
-                <button class="modal-close" onclick="closeFolderModal()">
+                <button class="modal-close" id="modalCloseBtn">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -426,8 +430,8 @@
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="closeFolderModal()">取消</button>
-                    <button type="button" class="btn-primary" onclick="createNewFolder()">创建</button>
+                    <button type="button" class="btn-secondary" id="cancelFolderBtn">取消</button>
+                    <button type="button" class="btn-primary" id="createFolderBtn">创建</button>
                 </div>
             </div>
         </div>
@@ -1436,13 +1440,40 @@
                 const modal = document.getElementById('newFolderModal');
                 const nameInput = document.getElementById('folderNameInput');
                 const colorInput = document.getElementById('folderColorInput');
+                const cancelBtn = document.getElementById('cancelFolderBtn');
+                const createBtn = document.getElementById('createFolderBtn');
+                const closeBtn = document.getElementById('modalCloseBtn');
 
                 // 重置表单
                 nameInput.value = '';
                 colorInput.value = '#4A90E2';
+                nameInput.style.borderColor = '#e1e5e9';
 
-                modal.style.display = 'flex';
+                modal.classList.add('show');
                 nameInput.focus();
+
+                // 移除之前的事件监听器
+                const newCancelBtn = cancelBtn.cloneNode(true);
+                const newCreateBtn = createBtn.cloneNode(true);
+                const newCloseBtn = closeBtn.cloneNode(true);
+                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+                createBtn.parentNode.replaceChild(newCreateBtn, createBtn);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+
+                // 绑定关闭按钮
+                newCloseBtn.addEventListener('click', () => {
+                    this.closeFolderModal();
+                });
+
+                // 绑定取消按钮
+                newCancelBtn.addEventListener('click', () => {
+                    this.closeFolderModal();
+                });
+
+                // 绑定创建按钮
+                newCreateBtn.addEventListener('click', () => {
+                    this.createNewFolder();
+                });
 
                 // 绑定颜色预设点击事件
                 document.querySelectorAll('.color-preset').forEach(preset => {
@@ -1455,11 +1486,21 @@
                 });
 
                 // 绑定回车键创建
-                nameInput.addEventListener('keypress', (e) => {
+                const handleKeyPress = (e) => {
                     if (e.key === 'Enter') {
                         this.createNewFolder();
+                    } else if (e.key === 'Escape') {
+                        this.closeFolderModal();
                     }
-                });
+                };
+                nameInput.removeEventListener('keypress', handleKeyPress);
+                nameInput.addEventListener('keypress', handleKeyPress);
+            }
+
+            // 关闭文件夹模态框
+            closeFolderModal() {
+                const modal = document.getElementById('newFolderModal');
+                modal.classList.remove('show');
             }
 
             // 导航到文件夹
@@ -1509,97 +1550,118 @@
                 }
                 breadcrumb.innerHTML = breadcrumbHtml;
             }
+
+            // 创建新文件夹
+            async createNewFolder() {
+                const nameInput = document.getElementById('folderNameInput');
+                const colorInput = document.getElementById('folderColorInput');
+                const createBtn = document.querySelector('.btn-primary');
+
+                const name = nameInput.value.trim();
+                if (!name) {
+                    nameInput.style.borderColor = '#dc3545';
+                    nameInput.focus();
+                    this.showNotification('请输入文件夹名称', 'error');
+                    return;
+                }
+
+                // 检查名称长度
+                if (name.length > 50) {
+                    nameInput.style.borderColor = '#dc3545';
+                    this.showNotification('文件夹名称不能超过50个字符', 'error');
+                    return;
+                }
+
+                // 检查是否已存在同名文件夹
+                const existingFolder = Array.from(this.folders.values()).find(f =>
+                    f.name === name && f.parentFolder === (this.currentFolderId || 'root')
+                );
+                if (existingFolder) {
+                    nameInput.style.borderColor = '#dc3545';
+                    this.showNotification('该文件夹名称已存在', 'error');
+                    return;
+                }
+
+                // 重置输入框样式
+                nameInput.style.borderColor = '#e1e5e9';
+
+                // 显示创建中状态
+                const originalText = createBtn.textContent;
+                createBtn.textContent = '创建中...';
+                createBtn.disabled = true;
+
+                try {
+                    // 检查是否为本地开发环境
+                    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+                    if (isLocalDev) {
+                        // 本地开发环境：模拟成功创建文件夹
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟网络延迟
+
+                        const newFolder = {
+                            id: 'folder_' + Date.now(),
+                            name: name,
+                            color: colorInput.value,
+                            parentFolder: this.currentFolderId === 'all' ? 'root' : (this.currentFolderId || 'root'),
+                            fileCount: 0,
+                            createdAt: new Date().toISOString()
+                        };
+
+                        this.folders.set(newFolder.id, newFolder);
+
+                        // 清除文件夹缓存，强制刷新
+                        localStorage.removeItem('telegraph_folders_cache');
+
+                        this.renderSidebar();
+                        this.showNotification(`文件夹 "${name}" 创建成功！（本地演示模式）`, 'success');
+                        this.closeFolderModal();
+                    } else {
+                        // 生产环境：调用真实API
+                        const response = await fetch('/api/manage/folders-enhanced', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                name: name,
+                                color: colorInput.value,
+                                parentFolder: this.currentFolderId === 'all' ? 'root' : (this.currentFolderId || 'root')
+                            })
+                        });
+
+                        if (response.ok) {
+                            const newFolder = await response.json();
+                            this.folders.set(newFolder.id, newFolder);
+
+                            // 清除文件夹缓存，强制刷新
+                            localStorage.removeItem('telegraph_folders_cache');
+
+                            this.renderSidebar();
+                            this.showNotification(`文件夹 "${name}" 创建成功！`, 'success');
+                            this.closeFolderModal();
+                        } else {
+                            const error = await response.json();
+                            this.showNotification('创建失败：' + (error.error || '未知错误'), 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('创建文件夹失败:', error);
+                    this.showNotification('创建失败：网络连接错误', 'error');
+                } finally {
+                    // 恢复按钮状态
+                    createBtn.textContent = originalText;
+                    createBtn.disabled = false;
+                }
+            }
         }
 
         // 启动应用
         const imageViewer = new SimpleImageViewer();
 
-        // 全局函数：关闭文件夹模态框
-        function closeFolderModal() {
-            const modal = document.getElementById('newFolderModal');
-            modal.style.display = 'none';
-        }
-
-        // 全局函数：创建新文件夹
-        async function createNewFolder() {
-            const nameInput = document.getElementById('folderNameInput');
-            const colorInput = document.getElementById('folderColorInput');
-            const createBtn = document.querySelector('.btn-primary');
-
-            const name = nameInput.value.trim();
-            if (!name) {
-                nameInput.style.borderColor = '#dc3545';
-                nameInput.focus();
-                imageViewer.showNotification('请输入文件夹名称', 'error');
-                return;
-            }
-
-            // 检查名称长度
-            if (name.length > 50) {
-                nameInput.style.borderColor = '#dc3545';
-                imageViewer.showNotification('文件夹名称不能超过50个字符', 'error');
-                return;
-            }
-
-            // 检查是否已存在同名文件夹
-            const existingFolder = Array.from(imageViewer.folders.values()).find(f =>
-                f.name === name && f.parentFolder === (imageViewer.currentFolderId || 'root')
-            );
-            if (existingFolder) {
-                nameInput.style.borderColor = '#dc3545';
-                imageViewer.showNotification('该文件夹名称已存在', 'error');
-                return;
-            }
-
-            // 重置输入框样式
-            nameInput.style.borderColor = '#e1e5e9';
-
-            // 显示创建中状态
-            const originalText = createBtn.textContent;
-            createBtn.textContent = '创建中...';
-            createBtn.disabled = true;
-
-            try {
-                const response = await fetch('/api/manage/folders-enhanced', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        name: name,
-                        color: colorInput.value,
-                        parentFolder: imageViewer.currentFolderId === 'all' ? 'root' : (imageViewer.currentFolderId || 'root')
-                    })
-                });
-
-                if (response.ok) {
-                    const newFolder = await response.json();
-                    imageViewer.folders.set(newFolder.id, newFolder);
-
-                    // 清除文件夹缓存，强制刷新
-                    localStorage.removeItem('telegraph_folders_cache');
-
-                    imageViewer.renderSidebar();
-                    imageViewer.showNotification(`文件夹 "${name}" 创建成功！`, 'success');
-                    closeFolderModal();
-                } else {
-                    const error = await response.json();
-                    imageViewer.showNotification('创建失败：' + (error.error || '未知错误'), 'error');
-                }
-            } catch (error) {
-                console.error('创建文件夹失败:', error);
-                imageViewer.showNotification('创建失败：网络连接错误', 'error');
-            } finally {
-                // 恢复按钮状态
-                createBtn.textContent = originalText;
-                createBtn.disabled = false;
-            }
-        }
-
         // 点击模态框背景关闭
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
-                closeFolderModal();
+                imageViewer.closeFolderModal();
             }
         });
     </script>
