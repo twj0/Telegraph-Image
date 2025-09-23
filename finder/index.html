@@ -512,8 +512,13 @@
                 }
             }
 
-            // 调试页面状态
+            // 优化调试功能 - 减少延迟和日志
             debugPageState() {
+                // 只在开发模式下输出详细日志
+                const isDev = window.location.hostname === 'localhost';
+                if (!isDev) return;
+
+                // 减少延迟
                 setTimeout(() => {
                     console.log('🔍 调试页面状态...');
 
@@ -521,52 +526,47 @@
                     const fileGrid = document.getElementById('fileGrid');
                     const images = document.querySelectorAll('.file-icon.image img');
 
-                    console.log('📊 页面元素状态:');
-                    console.log('- fileArea存在:', !!fileArea);
-                    console.log('- fileGrid存在:', !!fileGrid);
-                    console.log('- 图片数量:', images.length);
+                    // 简化日志输出
+                    console.log(`📊 页面状态: fileArea=${!!fileArea}, fileGrid=${!!fileGrid}, 图片=${images.length}`);
 
-                    if (fileArea) {
-                        const rect = fileArea.getBoundingClientRect();
-                        console.log('- fileArea位置:', rect);
-                        console.log('- fileArea样式:', window.getComputedStyle(fileArea).display);
+                    if (fileArea && fileGrid) {
+                        const fileAreaDisplay = window.getComputedStyle(fileArea).display;
+                        const fileGridDisplay = window.getComputedStyle(fileGrid).display;
+                        console.log(`📊 显示状态: fileArea=${fileAreaDisplay}, fileGrid=${fileGridDisplay}`);
                     }
 
-                    if (fileGrid) {
-                        const rect = fileGrid.getBoundingClientRect();
-                        console.log('- fileGrid位置:', rect);
-                        console.log('- fileGrid样式:', window.getComputedStyle(fileGrid).display);
-                        console.log('- fileGrid内容长度:', fileGrid.innerHTML.length);
+                    // 只输出第一张图片的信息作为示例
+                    if (images.length > 0) {
+                        const firstImg = images[0];
+                        const rect = firstImg.getBoundingClientRect();
+                        console.log(`📊 图片示例: ${firstImg.clientWidth}x${firstImg.clientHeight}, 可见=${rect.width > 0}`);
                     }
-
-                    images.forEach((img, index) => {
-                        const rect = img.getBoundingClientRect();
-                        console.log(`- 图片${index + 1}:`, {
-                            src: img.src,
-                            size: img.clientWidth + 'x' + img.clientHeight,
-                            position: rect,
-                            visible: rect.width > 0 && rect.height > 0
-                        });
-                    });
 
                     console.log('🔍 调试完成');
-                }, 1000);
+                }, 200); // 减少延迟从1000ms到200ms
             }
 
-            // 启动定期检查机制
+            // 优化定期检查机制 - 减少频率和性能影响
             startPeriodicCheck() {
-                // 每30秒检查一次更新
+                // 延长检查间隔到60秒，减少性能影响
                 setInterval(async () => {
-                    await this.checkForUpdates();
-                }, 30000);
+                    // 只在页面可见时检查更新
+                    if (!document.hidden) {
+                        await this.checkForUpdates();
+                    }
+                }, 60000);
 
-                // 页面获得焦点时也检查更新
+                // 页面获得焦点时也检查更新（但增加防抖）
+                let focusTimeout;
                 window.addEventListener('focus', async () => {
-                    console.log('🔍 页面获得焦点，检查更新...');
-                    await this.checkForUpdates();
+                    clearTimeout(focusTimeout);
+                    focusTimeout = setTimeout(async () => {
+                        console.log('🔍 页面获得焦点，检查更新...');
+                        await this.checkForUpdates();
+                    }, 1000); // 1秒防抖
                 });
 
-                console.log('🔄 已启动定期检查机制');
+                console.log('🔄 已启动优化的定期检查机制');
             }
 
             hideLoading() {
@@ -855,7 +855,10 @@
 
                 // 获取当前文件夹的子文件夹
                 const subFolders = this.getCurrentSubFolders();
-                const totalItems = subFolders.length + this.images.length;
+
+                // 获取当前文件夹的图片（根据文件夹过滤）
+                const currentImages = this.getCurrentFolderImages();
+                const totalItems = subFolders.length + currentImages.length;
 
                 if (totalItems === 0) {
                     if (emptyState) emptyState.style.display = 'flex';
@@ -877,8 +880,8 @@
                     </div>
                 `).join('');
 
-                // 渲染图片文件
-                const imagesHtml = this.images.map(image => `
+                // 渲染图片文件（只显示当前文件夹的图片）
+                const imagesHtml = currentImages.map(image => `
                     <div class="file-item image-item" data-image-id="${image.id}">
                         <div class="file-icon image">
                             <img src="${image.url}" alt="${image.name}" loading="lazy"
@@ -910,7 +913,18 @@
                     this.forcePageRerender();
                 }, 100);
 
-                console.log(`✅ 渲染了 ${subFolders.length} 个文件夹和 ${this.images.length} 张图片`);
+                console.log(`✅ 渲染了 ${subFolders.length} 个文件夹和 ${currentImages.length} 张图片`);
+            }
+
+            // 获取当前文件夹的图片
+            getCurrentFolderImages() {
+                if (this.currentFolderId === 'all' || this.currentPath === '/') {
+                    // 在根目录显示所有未分类的图片（没有folderId或folderId为null/undefined的图片）
+                    return this.images.filter(image => !image.folderId || image.folderId === 'all');
+                } else {
+                    // 在特定文件夹内只显示属于该文件夹的图片
+                    return this.images.filter(image => image.folderId === this.currentFolderId);
+                }
             }
 
             // 获取当前文件夹的子文件夹
@@ -957,42 +971,30 @@
                 });
             }
 
-            // Force override CSS constraints using JavaScript
+            // 优化图片样式应用 - 减少DOM操作
             forceImageStyles() {
-                console.log('🎨 强制应用图片样式...');
+                console.log('🎨 优化应用图片样式...');
 
+                // 批量处理，减少重绘
                 const images = document.querySelectorAll('.file-icon.image img');
-                images.forEach((img, index) => {
-                    // Force styles using JavaScript
-                    img.style.setProperty('width', '100%', 'important');
-                    img.style.setProperty('height', '120px', 'important');
-                    img.style.setProperty('max-width', 'none', 'important');
-                    img.style.setProperty('max-height', 'none', 'important');
-                    img.style.setProperty('min-width', '120px', 'important');
-                    img.style.setProperty('min-height', '120px', 'important');
-                    img.style.setProperty('object-fit', 'cover', 'important');
-                    img.style.setProperty('border-radius', '8px', 'important');
-                    img.style.setProperty('display', 'block', 'important');
-
-                    console.log(`✅ 应用样式到图片 ${index + 1}: ${img.clientWidth}x${img.clientHeight}`);
-                });
-
-                // Force parent container styles
                 const containers = document.querySelectorAll('.file-icon.image');
-                containers.forEach((container, index) => {
-                    container.style.setProperty('width', '100%', 'important');
-                    container.style.setProperty('height', '120px', 'important');
-                    container.style.setProperty('display', 'flex', 'important');
-                    container.style.setProperty('align-items', 'center', 'important');
-                    container.style.setProperty('justify-content', 'center', 'important');
-                    container.style.setProperty('overflow', 'hidden', 'important');
-                    container.style.setProperty('border-radius', '8px', 'important');
-                    container.style.setProperty('background', '#f0f0f0', 'important');
 
-                    console.log(`✅ 应用容器样式 ${index + 1}`);
+                // 使用requestAnimationFrame优化性能
+                requestAnimationFrame(() => {
+                    images.forEach((img, index) => {
+                        // 使用cssText一次性设置所有样式
+                        img.style.cssText += 'width: 100% !important; height: 120px !important; max-width: none !important; max-height: none !important; min-width: 120px !important; min-height: 120px !important; object-fit: cover !important; border-radius: 8px !important; display: block !important;';
+                        console.log(`✅ 应用样式到图片 ${index + 1}: 120x120`);
+                    });
+
+                    containers.forEach((container, index) => {
+                        // 使用cssText一次性设置所有样式
+                        container.style.cssText += 'width: 100% !important; height: 120px !important; display: flex !important; align-items: center !important; justify-content: center !important; overflow: hidden !important; border-radius: 8px !important; background: #f0f0f0 !important;';
+                        console.log(`✅ 应用容器样式 ${index + 1}`);
+                    });
+
+                    console.log('🎨 图片样式优化应用完成');
                 });
-
-                console.log('🎨 图片样式强制应用完成');
             }
 
             // 强制页面重新渲染 - 解决浏览器渲染问题
@@ -1017,23 +1019,21 @@
                     fileGrid.style.setProperty('opacity', '1', 'important');
                     fileGrid.style.setProperty('display', 'grid', 'important');
 
-                    // 方法4: 强制重新计算布局
-                    setTimeout(() => {
-                        fileGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(250px, 1fr))';
-                        fileGrid.style.gap = '20px';
-                        fileGrid.style.padding = '20px';
+                    // 优化布局计算 - 减少延迟
+                    requestAnimationFrame(() => {
+                        fileGrid.style.cssText += 'grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important; gap: 20px !important; padding: 20px !important;';
 
-                        // 确保所有图片容器可见
+                        // 批量处理文件项
                         const fileItems = document.querySelectorAll('.file-item');
                         fileItems.forEach((item, index) => {
-                            item.style.setProperty('display', 'flex', 'important');
-                            item.style.setProperty('visibility', 'visible', 'important');
-                            item.style.setProperty('opacity', '1', 'important');
-                            console.log(`✅ 强制显示文件项 ${index + 1}`);
+                            if (item.style.display === 'none' || !item.style.visibility) {
+                                item.style.cssText += 'display: flex !important; visibility: visible !important; opacity: 1 !important;';
+                                console.log(`✅ 强制显示文件项 ${index + 1}`);
+                            }
                         });
 
-                        console.log('🔄 页面重新渲染完成');
-                    }, 50);
+                        console.log('🔄 页面渲染优化完成');
+                    });
                 }
             }
 
@@ -1228,9 +1228,9 @@
                 try {
                     statusElement.textContent = '上传中...';
                     
-                    // 模拟软进度条
-                    for (let i = 0; i <= 90; i += 10) {
-                        await new Promise(resolve => setTimeout(resolve, 150));
+                    // 优化进度条动画 - 减少延迟
+                    for (let i = 0; i <= 90; i += 15) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
                         if (!document.getElementById(taskId)) return; // 任务可能已被取消
                         progressFill.style.width = i + '%';
                         statusElement.textContent = `上传中... ${i}%`;
@@ -1609,8 +1609,8 @@
 
                         this.folders.set(newFolder.id, newFolder);
 
-                        // 清除文件夹缓存，强制刷新
-                        localStorage.removeItem('telegraph_folders_cache');
+                        // 保存新的文件夹到缓存
+                        this.saveFoldersToCache(Array.from(this.folders.values()));
 
                         this.renderSidebar();
                         this.showNotification(`文件夹 "${name}" 创建成功！（本地演示模式）`, 'success');
