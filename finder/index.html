@@ -47,6 +47,155 @@
             cursor: pointer !important;
             transition: all 0.2s ease !important;
         }
+
+        /* 文件夹样式 */
+        .folder-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: white !important;
+            border: 2px solid transparent !important;
+        }
+
+        .folder-item:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3) !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
+        }
+
+        .folder-item .file-icon {
+            background: transparent !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 120px !important;
+        }
+
+        .folder-item .file-name {
+            color: white !important;
+            font-weight: 600 !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        }
+
+        .folder-item .file-size {
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-size: 12px !important;
+        }
+
+        /* 新建文件夹模态框样式 */
+        .modal {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background: rgba(0, 0, 0, 0.5) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 1000 !important;
+        }
+
+        .modal-content {
+            background: white !important;
+            border-radius: 12px !important;
+            padding: 24px !important;
+            width: 90% !important;
+            max-width: 400px !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .modal-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            margin-bottom: 20px !important;
+        }
+
+        .modal-close {
+            background: none !important;
+            border: none !important;
+            font-size: 18px !important;
+            cursor: pointer !important;
+            color: #999 !important;
+        }
+
+        .form-group {
+            margin-bottom: 16px !important;
+        }
+
+        .form-group label {
+            display: block !important;
+            margin-bottom: 6px !important;
+            font-weight: 600 !important;
+            color: #333 !important;
+        }
+
+        .form-group input {
+            width: 100% !important;
+            padding: 10px 12px !important;
+            border: 2px solid #e1e5e9 !important;
+            border-radius: 8px !important;
+            font-size: 14px !important;
+        }
+
+        .color-picker {
+            display: flex !important;
+            align-items: center !important;
+            gap: 12px !important;
+        }
+
+        .color-presets {
+            display: flex !important;
+            gap: 8px !important;
+        }
+
+        .color-preset {
+            width: 24px !important;
+            height: 24px !important;
+            border-radius: 50% !important;
+            cursor: pointer !important;
+            border: 2px solid transparent !important;
+            transition: all 0.2s ease !important;
+        }
+
+        .color-preset:hover,
+        .color-preset.selected {
+            border-color: #333 !important;
+            transform: scale(1.1) !important;
+        }
+
+        .form-actions {
+            display: flex !important;
+            gap: 12px !important;
+            justify-content: flex-end !important;
+            margin-top: 24px !important;
+        }
+
+        .btn-secondary, .btn-primary {
+            padding: 10px 20px !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa !important;
+            color: #6c757d !important;
+        }
+
+        .btn-primary {
+            background: #007bff !important;
+            color: white !important;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef !important;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3 !important;
+        }
     </style>
 </head>
 <body>
@@ -67,6 +216,10 @@
             <button id="viewModeBtn" class="btn-icon" title="切换视图">
                 <i class="fas fa-th"></i>
             </button>
+            <button id="newFolderBtn" class="btn-secondary" title="新建文件夹">
+                <i class="fas fa-folder-plus"></i>
+                新建文件夹
+            </button>
             <button id="refreshBtn" class="btn-secondary" title="刷新图片列表">
                 <i class="fas fa-sync-alt"></i>
                 刷新
@@ -85,10 +238,30 @@
             <div class="sidebar-section">
                 <h3>图片管理</h3>
                 <ul class="nav-list">
-                    <li class="nav-item active" data-path="/">
+                    <li class="nav-item active" data-path="/" data-folder-type="system">
                         <i class="fas fa-images"></i>
                         <span>全部图片</span>
                     </li>
+                    <li class="nav-item" data-path="/recent" data-folder-type="system">
+                        <i class="fas fa-clock"></i>
+                        <span>最近使用</span>
+                    </li>
+                    <li class="nav-item" data-path="/favorites" data-folder-type="system">
+                        <i class="fas fa-star"></i>
+                        <span>收藏夹</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <h3>我的文件夹</h3>
+                    <button id="sidebarNewFolderBtn" class="btn-icon" title="新建文件夹" style="font-size: 12px; padding: 4px;">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <ul class="nav-list" id="customFoldersList">
+                    <!-- 动态加载的自定义文件夹 -->
                 </ul>
             </div>
 
@@ -224,6 +397,42 @@
         <!-- 上传任务将通过JavaScript动态添加 -->
     </div>
 
+    <!-- 新建文件夹模态框 -->
+    <div id="newFolderModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新建文件夹</h3>
+                <button class="modal-close" onclick="closeFolderModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="folderNameInput">文件夹名称</label>
+                    <input type="text" id="folderNameInput" placeholder="请输入文件夹名称" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="folderColorInput">文件夹颜色</label>
+                    <div class="color-picker">
+                        <input type="color" id="folderColorInput" value="#4A90E2">
+                        <div class="color-presets">
+                            <span class="color-preset" data-color="#4A90E2" style="background: #4A90E2;"></span>
+                            <span class="color-preset" data-color="#34C759" style="background: #34C759;"></span>
+                            <span class="color-preset" data-color="#FF9500" style="background: #FF9500;"></span>
+                            <span class="color-preset" data-color="#FF3B30" style="background: #FF3B30;"></span>
+                            <span class="color-preset" data-color="#AF52DE" style="background: #AF52DE;"></span>
+                            <span class="color-preset" data-color="#007AFF" style="background: #007AFF;"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeFolderModal()">取消</button>
+                    <button type="button" class="btn-primary" onclick="createNewFolder()">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 通知容器 -->
     <div id="notifications" class="notifications"></div>
 
@@ -232,6 +441,9 @@
         class SimpleImageViewer {
             constructor() {
                 this.images = [];
+                this.folders = new Map();
+                this.currentPath = '/';
+                this.currentFolderId = null;
                 console.log('🚀 Simple Image Viewer 启动...');
                 this.init();
             }
@@ -251,14 +463,49 @@
 
                 this.hideLoading();
                 this.bindEvents();
+
+                // 恢复页面状态
+                this.restorePageState();
+
+                await this.loadFolders(); // 加载文件夹
                 await this.loadImages(true); // 首次加载强制刷新
                 this.renderImages();
+                this.renderSidebar(); // 渲染侧边栏
                 this.startPeriodicCheck(); // 启动定期检查
 
                 // 添加额外的调试信息
                 this.debugPageState();
 
                 console.log('✅ 图片加载完成');
+            }
+
+            // 恢复页面状态
+            restorePageState() {
+                try {
+                    const savedState = localStorage.getItem('telegraph_page_state');
+                    if (savedState) {
+                        const state = JSON.parse(savedState);
+                        this.currentPath = state.currentPath || '/';
+                        this.currentFolderId = state.currentFolderId || 'all';
+                        console.log('📄 恢复页面状态:', state);
+                    }
+                } catch (error) {
+                    console.error('恢复页面状态失败:', error);
+                }
+            }
+
+            // 保存页面状态
+            savePageState() {
+                try {
+                    const state = {
+                        currentPath: this.currentPath,
+                        currentFolderId: this.currentFolderId,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('telegraph_page_state', JSON.stringify(state));
+                } catch (error) {
+                    console.error('保存页面状态失败:', error);
+                }
             }
 
             // 调试页面状态
@@ -336,6 +583,22 @@
                     });
                 }
 
+                // 新建文件夹按钮
+                const newFolderBtn = document.getElementById('newFolderBtn');
+                if (newFolderBtn) {
+                    newFolderBtn.addEventListener('click', () => {
+                        this.showNewFolderModal();
+                    });
+                }
+
+                // 侧边栏新建文件夹按钮
+                const sidebarNewFolderBtn = document.getElementById('sidebarNewFolderBtn');
+                if (sidebarNewFolderBtn) {
+                    sidebarNewFolderBtn.addEventListener('click', () => {
+                        this.showNewFolderModal();
+                    });
+                }
+
                 // 刷新按钮
                 const refreshBtn = document.getElementById('refreshBtn');
                 if (refreshBtn) {
@@ -345,9 +608,11 @@
                         refreshBtn.disabled = true;
 
                         try {
+                            await this.loadFolders();
                             await this.loadImages(true);
                             this.renderImages();
-                            this.showSuccessMessage('图片列表已刷新！');
+                            this.renderSidebar();
+                            this.showSuccessMessage('列表已刷新！');
                         } finally {
                             refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新';
                             refreshBtn.disabled = false;
@@ -506,14 +771,39 @@
             filterImages(files) {
                 if (!Array.isArray(files)) return [];
 
-                return files
-                    .filter(file => this.isImageFile(file.name))
+                let filteredFiles = files.filter(file => this.isImageFile(file.name));
+
+                // 根据当前文件夹过滤
+                if (this.currentFolderId && this.currentFolderId !== 'all') {
+                    if (this.currentFolderId === 'recent') {
+                        // 最近使用：显示最近7天的图片
+                        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+                        filteredFiles = filteredFiles.filter(file =>
+                            (file.metadata?.TimeStamp || 0) > sevenDaysAgo
+                        );
+                    } else if (this.currentFolderId === 'favorites') {
+                        // 收藏夹：显示收藏的图片
+                        filteredFiles = filteredFiles.filter(file =>
+                            file.metadata?.liked === true
+                        );
+                    } else {
+                        // 自定义文件夹：根据folderId或parentFolder过滤
+                        filteredFiles = filteredFiles.filter(file =>
+                            file.metadata?.folderId === this.currentFolderId ||
+                            file.metadata?.parentFolder === this.currentFolderId
+                        );
+                    }
+                }
+
+                return filteredFiles
                     .map(file => ({
                         id: file.name,
                         name: file.metadata?.fileName || file.name,
                         size: file.metadata?.fileSize || 0,
                         url: `/file/${file.name}`,
-                        uploadDate: new Date(file.metadata?.TimeStamp || Date.now())
+                        uploadDate: new Date(file.metadata?.TimeStamp || Date.now()),
+                        folderId: file.metadata?.folderId || file.metadata?.parentFolder,
+                        liked: file.metadata?.liked || false
                     }))
                     .sort((a, b) => b.uploadDate - a.uploadDate);
             }
@@ -559,7 +849,11 @@
                     return;
                 }
 
-                if (this.images.length === 0) {
+                // 获取当前文件夹的子文件夹
+                const subFolders = this.getCurrentSubFolders();
+                const totalItems = subFolders.length + this.images.length;
+
+                if (totalItems === 0) {
                     if (emptyState) emptyState.style.display = 'flex';
                     fileGrid.style.display = 'none';
                     return;
@@ -568,8 +862,20 @@
                 if (emptyState) emptyState.style.display = 'none';
                 fileGrid.style.display = 'grid';
 
-                fileGrid.innerHTML = this.images.map(image => `
-                    <div class="file-item" data-image-id="${image.id}">
+                // 渲染文件夹（排在前面）
+                const foldersHtml = subFolders.map(folder => `
+                    <div class="file-item folder-item" data-folder-id="${folder.id}">
+                        <div class="file-icon folder">
+                            <i class="fas fa-folder" style="color: ${folder.color || '#4A90E2'}; font-size: 48px;"></i>
+                        </div>
+                        <div class="file-name" title="${folder.name}">${folder.name}</div>
+                        <div class="file-size">${folder.fileCount || 0} 个文件</div>
+                    </div>
+                `).join('');
+
+                // 渲染图片文件
+                const imagesHtml = this.images.map(image => `
+                    <div class="file-item image-item" data-image-id="${image.id}">
                         <div class="file-icon image">
                             <img src="${image.url}" alt="${image.name}" loading="lazy"
                                  style="
@@ -590,7 +896,9 @@
                     </div>
                 `).join('');
 
-                this.bindImageEvents();
+                fileGrid.innerHTML = foldersHtml + imagesHtml;
+
+                this.bindFileEvents();
 
                 // Force override CSS constraints after DOM update
                 setTimeout(() => {
@@ -598,12 +906,38 @@
                     this.forcePageRerender();
                 }, 100);
 
-                console.log(`✅ 渲染了 ${this.images.length} 张图片`);
+                console.log(`✅ 渲染了 ${subFolders.length} 个文件夹和 ${this.images.length} 张图片`);
             }
 
-            bindImageEvents() {
-                const fileItems = document.querySelectorAll('.file-item');
-                fileItems.forEach(item => {
+            // 获取当前文件夹的子文件夹
+            getCurrentSubFolders() {
+                if (this.currentFolderId === 'all' || this.currentPath === '/') {
+                    // 在根目录显示所有顶级文件夹
+                    return Array.from(this.folders.values()).filter(folder =>
+                        !folder.isSystem && (folder.parentFolder === 'root' || !folder.parentFolder)
+                    );
+                } else if (this.currentFolderId && this.currentFolderId !== 'recent' && this.currentFolderId !== 'favorites') {
+                    // 在特定文件夹中显示子文件夹
+                    return Array.from(this.folders.values()).filter(folder =>
+                        folder.parentFolder === this.currentFolderId
+                    );
+                }
+                return [];
+            }
+
+            bindFileEvents() {
+                // 绑定文件夹点击事件
+                const folderItems = document.querySelectorAll('.folder-item');
+                folderItems.forEach(item => {
+                    item.addEventListener('dblclick', () => {
+                        const folderId = item.dataset.folderId;
+                        this.navigateToFolder(folderId);
+                    });
+                });
+
+                // 绑定图片点击事件
+                const imageItems = document.querySelectorAll('.image-item');
+                imageItems.forEach(item => {
                     item.addEventListener('click', () => {
                         const imageId = item.dataset.imageId;
                         const image = this.images.find(img => img.id === imageId);
@@ -901,6 +1235,12 @@
                     const formData = new FormData();
                     formData.append('file', file);
 
+                    // 添加当前文件夹ID
+                    if (this.currentFolderId && this.currentFolderId !== 'all') {
+                        formData.append('folderId', this.currentFolderId);
+                        formData.append('parentFolder', this.currentFolderId);
+                    }
+
                     const response = await fetch('/upload', {
                         method: 'POST',
                         body: formData
@@ -986,10 +1326,282 @@
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
+
+            // 加载文件夹列表
+            async loadFolders(forceRefresh = false) {
+                console.log('📁 加载文件夹列表...', forceRefresh ? '(强制刷新)' : '');
+
+                // 尝试从缓存加载
+                if (!forceRefresh) {
+                    const cachedFolders = this.loadFoldersFromCache();
+                    if (cachedFolders && cachedFolders.length > 0) {
+                        this.folders.clear();
+                        cachedFolders.forEach(folder => {
+                            this.folders.set(folder.id, folder);
+                        });
+                        console.log(`✅ 从缓存加载了 ${cachedFolders.length} 个文件夹`);
+                        return;
+                    }
+                }
+
+                try {
+                    const timestamp = forceRefresh ? `?t=${Date.now()}` : '';
+                    const response = await fetch(`/api/manage/folders-enhanced${timestamp}`);
+                    if (response.ok) {
+                        const folders = await response.json();
+                        this.folders.clear();
+                        folders.forEach(folder => {
+                            this.folders.set(folder.id, folder);
+                        });
+
+                        // 保存到缓存
+                        this.saveFoldersToCache(folders);
+                        console.log(`✅ 加载了 ${folders.length} 个文件夹`);
+                    } else {
+                        console.log('📁 使用默认文件夹');
+                        this.initDefaultFolders();
+                    }
+                } catch (error) {
+                    console.log('📁 API不可用，使用默认文件夹');
+                    this.initDefaultFolders();
+                }
+            }
+
+            // 从缓存加载文件夹
+            loadFoldersFromCache() {
+                try {
+                    const cached = localStorage.getItem('telegraph_folders_cache');
+                    if (cached) {
+                        const data = JSON.parse(cached);
+                        // 检查缓存是否过期（5分钟）
+                        if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+                            return data.folders;
+                        }
+                    }
+                } catch (error) {
+                    console.error('加载文件夹缓存失败:', error);
+                }
+                return null;
+            }
+
+            // 保存文件夹到缓存
+            saveFoldersToCache(folders) {
+                try {
+                    localStorage.setItem('telegraph_folders_cache', JSON.stringify({
+                        timestamp: Date.now(),
+                        folders: folders
+                    }));
+                } catch (error) {
+                    console.error('保存文件夹缓存失败:', error);
+                }
+            }
+
+            // 初始化默认文件夹
+            initDefaultFolders() {
+                this.folders.clear();
+                this.folders.set('all', { id: 'all', name: '全部图片', icon: 'fas fa-images', isSystem: true });
+                this.folders.set('recent', { id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true });
+                this.folders.set('favorites', { id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true });
+            }
+
+            // 渲染侧边栏
+            renderSidebar() {
+                const customFoldersList = document.getElementById('customFoldersList');
+                if (!customFoldersList) return;
+
+                const customFolders = Array.from(this.folders.values()).filter(folder => !folder.isSystem);
+
+                if (customFolders.length === 0) {
+                    customFoldersList.innerHTML = '<li style="padding: 8px 16px; color: #999; font-size: 12px;">暂无自定义文件夹</li>';
+                } else {
+                    customFoldersList.innerHTML = customFolders.map(folder => `
+                        <li class="nav-item" data-path="${folder.id}" data-folder-type="custom">
+                            <i class="fas fa-folder" style="color: ${folder.color || '#4A90E2'};"></i>
+                            <span>${folder.name}</span>
+                            <span class="folder-count">${folder.fileCount || 0}</span>
+                        </li>
+                    `).join('');
+
+                    // 绑定点击事件
+                    customFoldersList.querySelectorAll('.nav-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            this.navigateToFolder(item.dataset.path);
+                        });
+                    });
+                }
+            }
+
+            // 显示新建文件夹模态框
+            showNewFolderModal() {
+                const modal = document.getElementById('newFolderModal');
+                const nameInput = document.getElementById('folderNameInput');
+                const colorInput = document.getElementById('folderColorInput');
+
+                // 重置表单
+                nameInput.value = '';
+                colorInput.value = '#4A90E2';
+
+                modal.style.display = 'flex';
+                nameInput.focus();
+
+                // 绑定颜色预设点击事件
+                document.querySelectorAll('.color-preset').forEach(preset => {
+                    preset.addEventListener('click', () => {
+                        const color = preset.dataset.color;
+                        colorInput.value = color;
+                        document.querySelectorAll('.color-preset').forEach(p => p.classList.remove('selected'));
+                        preset.classList.add('selected');
+                    });
+                });
+
+                // 绑定回车键创建
+                nameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.createNewFolder();
+                    }
+                });
+            }
+
+            // 导航到文件夹
+            navigateToFolder(folderId) {
+                console.log('📁 导航到文件夹:', folderId);
+                this.currentFolderId = folderId;
+                this.currentPath = folderId === 'all' ? '/' : folderId;
+
+                // 保存页面状态
+                this.savePageState();
+
+                // 更新侧边栏活动状态
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                const activeItem = document.querySelector(`[data-path="${folderId}"]`);
+                if (activeItem) {
+                    activeItem.classList.add('active');
+                }
+
+                // 重新加载和渲染图片
+                this.loadImages(true).then(() => {
+                    this.renderImages();
+                });
+
+                // 更新面包屑
+                this.updateBreadcrumb();
+            }
+
+            // 更新面包屑导航
+            updateBreadcrumb() {
+                const breadcrumb = document.getElementById('breadcrumb');
+                if (!breadcrumb) return;
+
+                let breadcrumbHtml = '';
+                if (this.currentFolderId === 'all' || this.currentPath === '/') {
+                    breadcrumbHtml = '<span class="breadcrumb-item">全部图片</span>';
+                } else {
+                    const folder = this.folders.get(this.currentFolderId);
+                    if (folder) {
+                        breadcrumbHtml = `
+                            <span class="breadcrumb-item" onclick="imageViewer.navigateToFolder('all')">全部图片</span>
+                            <span class="breadcrumb-separator">/</span>
+                            <span class="breadcrumb-item">${folder.name}</span>
+                        `;
+                    }
+                }
+                breadcrumb.innerHTML = breadcrumbHtml;
+            }
         }
 
         // 启动应用
         const imageViewer = new SimpleImageViewer();
+
+        // 全局函数：关闭文件夹模态框
+        function closeFolderModal() {
+            const modal = document.getElementById('newFolderModal');
+            modal.style.display = 'none';
+        }
+
+        // 全局函数：创建新文件夹
+        async function createNewFolder() {
+            const nameInput = document.getElementById('folderNameInput');
+            const colorInput = document.getElementById('folderColorInput');
+            const createBtn = document.querySelector('.btn-primary');
+
+            const name = nameInput.value.trim();
+            if (!name) {
+                nameInput.style.borderColor = '#dc3545';
+                nameInput.focus();
+                imageViewer.showNotification('请输入文件夹名称', 'error');
+                return;
+            }
+
+            // 检查名称长度
+            if (name.length > 50) {
+                nameInput.style.borderColor = '#dc3545';
+                imageViewer.showNotification('文件夹名称不能超过50个字符', 'error');
+                return;
+            }
+
+            // 检查是否已存在同名文件夹
+            const existingFolder = Array.from(imageViewer.folders.values()).find(f =>
+                f.name === name && f.parentFolder === (imageViewer.currentFolderId || 'root')
+            );
+            if (existingFolder) {
+                nameInput.style.borderColor = '#dc3545';
+                imageViewer.showNotification('该文件夹名称已存在', 'error');
+                return;
+            }
+
+            // 重置输入框样式
+            nameInput.style.borderColor = '#e1e5e9';
+
+            // 显示创建中状态
+            const originalText = createBtn.textContent;
+            createBtn.textContent = '创建中...';
+            createBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/manage/folders-enhanced', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        color: colorInput.value,
+                        parentFolder: imageViewer.currentFolderId === 'all' ? 'root' : (imageViewer.currentFolderId || 'root')
+                    })
+                });
+
+                if (response.ok) {
+                    const newFolder = await response.json();
+                    imageViewer.folders.set(newFolder.id, newFolder);
+
+                    // 清除文件夹缓存，强制刷新
+                    localStorage.removeItem('telegraph_folders_cache');
+
+                    imageViewer.renderSidebar();
+                    imageViewer.showNotification(`文件夹 "${name}" 创建成功！`, 'success');
+                    closeFolderModal();
+                } else {
+                    const error = await response.json();
+                    imageViewer.showNotification('创建失败：' + (error.error || '未知错误'), 'error');
+                }
+            } catch (error) {
+                console.error('创建文件夹失败:', error);
+                imageViewer.showNotification('创建失败：网络连接错误', 'error');
+            } finally {
+                // 恢复按钮状态
+                createBtn.textContent = originalText;
+                createBtn.disabled = false;
+            }
+        }
+
+        // 点击模态框背景关闭
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                closeFolderModal();
+            }
+        });
     </script>
 </body>
 </html>

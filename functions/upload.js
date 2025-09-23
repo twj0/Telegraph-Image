@@ -51,8 +51,8 @@ export async function onRequestPost(context) {
 
         // 将文件信息保存到 KV 存储
         if (env.img_url) {
-            // 从请求中获取文件夹ID（如果有的话）
-            const folderId = formData.get('folderId') || null;
+            // 从请求中获取文件夹ID（支持多种字段名）
+            const folderId = formData.get('folderId') || formData.get('parentFolder') || null;
 
             await env.img_url.put(`${fileId}.${fileExtension}`, "", {
                 metadata: {
@@ -63,9 +63,15 @@ export async function onRequestPost(context) {
                     fileName: fileName,
                     fileSize: uploadFile.size,
                     folderId: folderId,
+                    parentFolder: folderId, // 兼容folders-enhanced.js的字段名
                     fileType: getFileTypeFromExtension(fileExtension)
                 }
             });
+
+            // 更新文件夹计数
+            if (folderId) {
+                await updateFolderFileCount(env, folderId);
+            }
         }
 
         return new Response(
@@ -151,4 +157,41 @@ function getFileTypeFromExtension(extension) {
         return 'document';
     }
     return 'file';
+}
+
+// 更新文件夹文件计数
+async function updateFolderFileCount(env, folderId) {
+    try {
+        // 获取文件夹信息
+        const folderData = await env.img_url.get(`folder_${folderId}`);
+        if (folderData) {
+            const folder = JSON.parse(folderData);
+
+            // 计算该文件夹中的文件数量
+            const filesList = await env.img_url.list();
+            const fileCount = filesList.keys.filter(file =>
+                file.metadata && (file.metadata.folderId === folderId || file.metadata.parentFolder === folderId)
+            ).length;
+
+            // 更新文件夹信息
+            folder.fileCount = fileCount;
+            folder.updatedAt = new Date().toISOString();
+
+            // 保存更新后的文件夹信息
+            await env.img_url.put(`folder_${folderId}`, JSON.stringify(folder));
+
+            // 更新文件夹列表中的计数
+            const foldersList = await env.img_url.get('folders_list');
+            if (foldersList) {
+                const folders = JSON.parse(foldersList);
+                const folderIndex = folders.findIndex(f => f.id === folderId);
+                if (folderIndex !== -1) {
+                    folders[folderIndex].fileCount = fileCount;
+                    await env.img_url.put('folders_list', JSON.stringify(folders));
+                }
+            }
+        }
+    } catch (error) {
+        console.error('更新文件夹计数失败:', error);
+    }
 }
