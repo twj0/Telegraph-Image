@@ -1,0 +1,21 @@
+name = "telegraph-image"
+compatibility_date = "2023-12-01"
+
+[env.development.vars]
+FINDER_ENABLED = "true"
+FINDER_USER = "admin"
+FINDER_PASS = "admin123"
+BASIC_USER = "admin"
+BASIC_PASS = "admin123"
+
+[[env.development.kv_namespaces]]
+binding = "img_url"
+id = "preview_id"
+preview_id = "preview_id"
+
+[env.production.vars]
+FINDER_ENABLED = "true"
+
+[[env.production.kv_namespaces]]
+binding = "img_url"
+id = "your_production_kv_id"

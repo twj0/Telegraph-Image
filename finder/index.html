@@ -480,6 +480,11 @@
                 // 添加额外的调试信息
                 this.debugPageState();
 
+                // 检查URL路由（放在最后执行）
+                setTimeout(() => {
+                    this.checkUrlRouting();
+                }, 1000);
+
                 console.log('✅ 图片加载完成');
             }
 
@@ -509,6 +514,27 @@
                     localStorage.setItem('telegraph_page_state', JSON.stringify(state));
                 } catch (error) {
                     console.error('保存页面状态失败:', error);
+                }
+            }
+
+            // 检查URL路由并执行相应操作
+            checkUrlRouting() {
+                const path = window.location.pathname;
+                const hash = window.location.hash;
+
+                console.log('🔗 检查URL路由:', path, hash);
+
+                // 检查是否是新建文件夹路由
+                if (path.includes('/finder/new') || hash === '#new') {
+                    console.log('📁 检测到新建文件夹路由，自动打开新建文件夹模态框');
+                    // 立即执行，不需要延迟
+                    this.showNewFolderModal();
+                    // 清除URL中的路由标识，避免重复触发
+                    if (path.includes('/finder/new')) {
+                        window.history.replaceState({}, '', '/finder/');
+                    } else if (hash === '#new') {
+                        window.history.replaceState({}, '', window.location.pathname);
+                    }
                 }
             }
 
@@ -1656,7 +1682,64 @@
         }
 
         // 启动应用
-        const imageViewer = new SimpleImageViewer();
+        window.imageViewer = new SimpleImageViewer();
+
+        // 全局路由检查函数
+        window.checkUrlRouting = function() {
+            const path = window.location.pathname;
+            const hash = window.location.hash;
+
+            console.log('🔗 全局路由检查:', path, hash);
+
+            // 检查是否是新建文件夹路由
+            if (path.includes('/finder/new') || hash === '#new') {
+                console.log('📁 检测到新建文件夹路由，自动打开新建文件夹模态框');
+
+                // 查找新建文件夹按钮并点击
+                const newFolderBtn = document.getElementById('newFolderBtn');
+                if (newFolderBtn) {
+                    newFolderBtn.click();
+                    console.log('✅ 已点击新建文件夹按钮');
+                } else {
+                    console.log('❌ 找不到新建文件夹按钮');
+                }
+
+                // 清除URL中的路由标识
+                if (path.includes('/finder/new')) {
+                    window.history.replaceState({}, '', '/finder/');
+                } else if (hash === '#new') {
+                    window.history.replaceState({}, '', window.location.pathname);
+                }
+            }
+        };
+
+        // 页面加载完成后检查路由
+        setTimeout(() => {
+            const hash = window.location.hash;
+            const path = window.location.pathname;
+
+            console.log('🔗 检查URL路由:', path, hash);
+
+            // 检查是否是新建文件夹路由
+            if (path.includes('/finder/new') || hash === '#new') {
+                console.log('📁 检测到新建文件夹路由，自动点击新建文件夹按钮');
+
+                const newFolderBtn = document.getElementById('newFolderBtn');
+                if (newFolderBtn) {
+                    newFolderBtn.click();
+                    console.log('✅ 已点击新建文件夹按钮');
+
+                    // 清除URL中的路由标识
+                    if (path.includes('/finder/new')) {
+                        window.history.replaceState({}, '', '/finder/');
+                    } else if (hash === '#new') {
+                        window.history.replaceState({}, '', window.location.pathname);
+                    }
+                } else {
+                    console.log('❌ 找不到新建文件夹按钮');
+                }
+            }
+        }, 1500);
 
         // 点击模态框背景关闭
         document.addEventListener('click', (e) => {
