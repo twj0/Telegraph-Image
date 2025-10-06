@@ -246,14 +246,7 @@
                         <i class="fas fa-images"></i>
                         <span>全部图片</span>
                     </li>
-                    <li class="nav-item" data-path="/recent" data-folder-type="system">
-                        <i class="fas fa-clock"></i>
-                        <span>最近使用</span>
-                    </li>
-                    <li class="nav-item" data-path="/favorites" data-folder-type="system">
-                        <i class="fas fa-star"></i>
-                        <span>收藏夹</span>
-                    </li>
+                    
                 </ul>
             </div>
 
@@ -269,19 +262,7 @@
                 </ul>
             </div>
 
-            <div class="sidebar-section">
-                <h3>快速操作</h3>
-                <ul class="nav-list">
-                    <li class="nav-item action-item" data-action="refresh">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>刷新列表</span>
-                    </li>
-                    <li class="nav-item action-item" data-action="clear-cache">
-                        <i class="fas fa-broom"></i>
-                        <span>清理缓存</span>
-                    </li>
-                </ul>
-            </div>
+            
         </aside>
 
         <!-- 文件显示区域 -->
@@ -649,53 +630,12 @@
                         }
                     });
                 }
-
-                // 侧边栏操作项事件
-                const actionItems = document.querySelectorAll('.action-item');
-                actionItems.forEach(item => {
-                    item.addEventListener('click', () => {
-                        const action = item.dataset.action;
-                        if (action === 'refresh') {
-                            document.getElementById('refreshBtn').click();
-                        } else if (action === 'clear-cache') {
-                            if (confirm('确定要清理缓存吗？这将刷新页面。')) {
-                                this.clearCache();
-                            }
-                        }
+                const rootNavItem = document.querySelector('.nav-item[data-folder-type="system"][data-path="/"]');
+                if (rootNavItem) {
+                    rootNavItem.addEventListener('click', () => {
+                        this.navigateToFolder('all');
                     });
-                });
-
-                // 系统文件夹导航
-                const systemNavItems = document.querySelectorAll('.nav-item[data-folder-type="system"]');
-                systemNavItems.forEach(item => {
-                    item.addEventListener('click', () => {
-                        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-                        item.classList.add('active');
-
-                        const path = item.dataset.path || '/';
-                        let targetId = 'all';
-
-                        if (path.includes('recent')) {
-                            targetId = 'recent';
-                        } else if (path.includes('favorites')) {
-                            targetId = 'favorites';
-                        }
-
-                        this.currentFolderId = targetId;
-                        this.currentPath = targetId === 'all' ? '/' : `/${targetId}`;
-                        this.savePageState();
-
-                        this.loadImages(true).then(() => {
-                            this.renderImages();
-                            this.renderSidebar();
-                            this.updateActiveNavigation();
-                        });
-
-                        this.updateBreadcrumb();
-                        this.updateActiveNavigation();
-                    });
-                });
-
+                }
                 // 文件输入
                 const fileInput = document.getElementById('fileInput');
                 if (fileInput) {
@@ -725,42 +665,6 @@
                 }
             }
 
-            // 清理缓存功能
-            clearCache() {
-                try {
-                    // 清理localStorage
-                    localStorage.removeItem('telegraph_image_list');
-                    localStorage.removeItem('finder_folders');
-                    localStorage.removeItem('finder_folder_structure');
-                    localStorage.removeItem('telegraph_folders_cache');
-                    localStorage.removeItem('telegraph_page_state');
-                    
-                    // 清理所有以folder_开头的项
-                    const keysToRemove = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (key && key.startsWith('folder_')) {
-                            keysToRemove.push(key);
-                        }
-                    }
-                    keysToRemove.forEach(key => localStorage.removeItem(key));
-                    
-                    // 清理sessionStorage
-                    sessionStorage.clear();
-                    
-                    this.showNotification('缓存已清理，页面将自动刷新', 'success');
-                    
-                    // 延迟刷新页面
-                    setTimeout(() => {
-                        window.location.reload(true);
-                    }, 1500);
-                    
-                    console.log('✅ 缓存清理完成');
-                } catch (error) {
-                    console.error('❌ 清理缓存失败:', error);
-                    this.showNotification('清理缓存失败: ' + error.message, 'error');
-                }
-            }
 
             async loadImages(forceRefresh = false) {
                 console.log('📸 加载图片列表...', forceRefresh ? '(强制刷新)' : '');
@@ -837,29 +741,7 @@
             filterImages(files) {
                 if (!Array.isArray(files)) return [];
 
-                let filteredFiles = files.filter(file => this.isImageFile(file.name));
-
-                // 根据当前文件夹过滤
-                if (this.currentFolderId && this.currentFolderId !== 'all') {
-                    if (this.currentFolderId === 'recent') {
-                        // 最近使用：显示最近7天的图片
-                        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-                        filteredFiles = filteredFiles.filter(file =>
-                            (file.metadata?.TimeStamp || 0) > sevenDaysAgo
-                        );
-                    } else if (this.currentFolderId === 'favorites') {
-                        // 收藏夹：显示收藏的图片
-                        filteredFiles = filteredFiles.filter(file =>
-                            file.metadata?.liked === true
-                        );
-                    } else {
-                        // 自定义文件夹：根据folderId或parentFolder过滤
-                        filteredFiles = filteredFiles.filter(file =>
-                            file.metadata?.folderId === this.currentFolderId ||
-                            file.metadata?.parentFolder === this.currentFolderId
-                        );
-                    }
-                }
+                const filteredFiles = files.filter(file => this.isImageFile(file.name));
 
                 return filteredFiles
                     .map(file => {
@@ -1011,8 +893,8 @@
             // 获取当前文件夹的图片
             getCurrentFolderImages() {
                 if (this.isRootView()) {
-                    // 根目录展示所有未绑定文件夹的图片
-                    return this.images.filter(image => !image.folderId || image.folderId === 'all');
+                    // 全部图片视图显示所有图片
+                    return [...this.images];
                 }
 
                 // 在特定文件夹内只显示属于该文件夹的图片
@@ -1026,7 +908,7 @@
                     return Array.from(this.folders.values()).filter(folder =>
                         !folder.isSystem && (folder.parentFolder === 'root' || !folder.parentFolder)
                     );
-                } else if (this.currentFolderId && this.currentFolderId !== 'recent' && this.currentFolderId !== 'favorites') {
+                } else if (this.currentFolderId) {
                     // 在特定文件夹中显示子文件夹
                     return Array.from(this.folders.values()).filter(folder =>
                         folder.parentFolder === this.currentFolderId
@@ -1610,17 +1492,12 @@
             prepareSystemFolders() {
                 this.folders.clear();
 
-                const systemFolders = [
-                    { id: 'all', name: '全部图片', icon: 'fas fa-images', isSystem: true },
-                    { id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true },
-                    { id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true }
-                ];
-
-                systemFolders.forEach(folder => {
-                    this.folders.set(folder.id, {
-                        fileCount: 0,
-                        ...folder
-                    });
+                this.folders.set('all', {
+                    id: 'all',
+                    name: '全部图片',
+                    icon: 'fas fa-images',
+                    isSystem: true,
+                    fileCount: 0
                 });
             }
 
@@ -1802,16 +1679,11 @@
             }
 
             updateActiveNavigation() {
-                const systemPathMap = {
-                    all: '/',
-                    recent: '/recent',
-                    favorites: '/favorites'
-                };
-
-                const expectedSystemPath = systemPathMap[this.currentFolderId] || '/';
+                const isAllView = !this.currentFolderId || this.currentFolderId === 'all' || this.currentFolderId === '/';
 
                 document.querySelectorAll('.nav-item[data-folder-type="system"]').forEach(item => {
-                    item.classList.toggle('active', item.dataset.path === expectedSystemPath);
+                    const isAllItem = item.dataset.path === '/';
+                    item.classList.toggle('active', isAllItem && isAllView);
                 });
 
                 document.querySelectorAll('.nav-item[data-folder-type="custom"]').forEach(item => {
@@ -1830,41 +1702,17 @@
 
                 const images = Array.isArray(this.images) ? this.images : [];
                 const folderCounts = new Map();
-                const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-                let recentCount = 0;
-                let favoritesCount = 0;
 
                 images.forEach(image => {
-                    const uploadTime = image.uploadDate instanceof Date
-                        ? image.uploadDate.getTime()
-                        : Number(image.uploadDate) || 0;
-
-                    if (uploadTime && uploadTime > weekAgo) {
-                        recentCount++;
+                    const folderKey = image.folderId;
+                    if (folderKey) {
+                        folderCounts.set(folderKey, (folderCounts.get(folderKey) || 0) + 1);
                     }
-
-                    if (image.liked) {
-                        favoritesCount++;
-                    }
-
-                    const folderKey = image.folderId || 'root';
-                    folderCounts.set(folderKey, (folderCounts.get(folderKey) || 0) + 1);
                 });
 
                 const allFolder = this.folders.get('all');
                 if (allFolder) {
                     allFolder.fileCount = images.length;
-                }
-
-                const recentFolder = this.folders.get('recent');
-                if (recentFolder) {
-                    recentFolder.fileCount = recentCount;
-                }
-
-                const favoritesFolder = this.folders.get('favorites');
-                if (favoritesFolder) {
-                    favoritesFolder.fileCount = favoritesCount;
                 }
 
                 this.folders.forEach(folder => {
