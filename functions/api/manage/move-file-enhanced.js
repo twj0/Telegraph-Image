@@ -88,11 +88,15 @@ async function moveFile(env, fileId, targetFolderId) {
     }
 
     // 更新文件元数据
+    const resolvedFolderId = targetFolderId && targetFolderId !== 'root' ? targetFolderId : null;
+    const resolvedParentFolder = resolvedFolderId || 'root';
+
     const updatedMetadata = {
         ...currentMetadata,
-        parentFolder: targetFolderId || 'root',
+        folderId: resolvedFolderId,
+        parentFolder: resolvedParentFolder,
         movedAt: new Date().toISOString(),
-        previousFolder: currentMetadata.parentFolder || 'root'
+        previousFolder: currentMetadata.parentFolder || currentMetadata.folderId || 'root'
     };
 
     // 保存更新后的文件
@@ -100,8 +104,8 @@ async function moveFile(env, fileId, targetFolderId) {
 
     return {
         fileId: fileId,
-        previousFolder: currentMetadata.parentFolder || 'root',
-        newFolder: targetFolderId || 'root',
+        previousFolder: currentMetadata.folderId || currentMetadata.parentFolder || 'root',
+        newFolder: resolvedFolderId || 'root',
         movedAt: updatedMetadata.movedAt
     };
 }
@@ -140,7 +144,8 @@ async function countFilesInFolder(env, folderId) {
         let count = 0;
 
         for (const file of filesList.keys) {
-            if (file.metadata?.parentFolder === folderId) {
+            const assignedFolderId = file.metadata?.folderId ?? file.metadata?.parentFolder ?? null;
+            if (assignedFolderId === folderId) {
                 count++;
             }
         }
@@ -231,15 +236,17 @@ async function getFilesInFolder(env, folderId) {
                 continue;
             }
 
-            const parentFolder = file.metadata?.parentFolder || 'root';
-            if (parentFolder === folderId) {
+            const assignedFolderId = file.metadata?.folderId ?? file.metadata?.parentFolder ?? null;
+            const normalizedFolderId = assignedFolderId || 'root';
+
+            if ((folderId === 'root' && normalizedFolderId === 'root') || normalizedFolderId === folderId) {
                 files.push({
                     id: file.name,
                     name: file.metadata?.fileName || file.name,
                     size: file.metadata?.fileSize || 0,
                     type: getFileType(file.name),
                     uploadDate: file.metadata?.TimeStamp || Date.now(),
-                    parentFolder: parentFolder,
+                    parentFolder: normalizedFolderId,
                     favorite: file.metadata?.liked || false,
                     url: `/file/${file.name}`
                 });

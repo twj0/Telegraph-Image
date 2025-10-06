@@ -76,10 +76,202 @@
 **主要特性包括：**
 
 *   **现代化的文件管理界面**：重新设计了整个界面，使其更直观、更易于使用。现在，您可以更轻松地浏览和管理您的图片。
+*   **文件夹管理功能**：支持创建自定义文件夹，对图片进行分类管理。支持拖拽上传到指定文件夹，提供完整的文件夹导航体验。
 *   **后台上传与软进度条**：引入了后台上传功能，支持多文件并发上传。上传过程将在右下角通过一个非阻塞的“软”进度条显示，您可以在上传期间继续浏览和管理其他图片，无需等待。
 *   **右键菜单**：为了提高操作效率，为每个图片添加了右键菜单。现在，您只需右键点击任何图片，即可快速访问复制链接、下载和删除等常用功能。
+*   **URL路由支持**：支持深度链接，可以通过URL直接访问特定功能，如 `/finder/#new` 自动打开新建文件夹界面。
+*   **安全认证保护**：内置Basic Authentication认证机制，保护文件管理界面的安全访问。
+
+#### Finder 访问与认证
+
+Finder功能需要认证才能访问，确保您的文件管理安全：
+
+**访问地址：** `https://your-domain.pages.dev/finder/`
+
+**认证配置：** 在Cloudflare Pages环境变量中设置：
+- `FINDER_ENABLED=true` - 启用Finder功能
+- `FINDER_USER=your_username` - 设置用户名
+- `FINDER_PASS=your_password` - 设置密码
+
+**快捷功能：**
+- 新建文件夹：`https://your-domain.pages.dev/finder/#new`
+- 文件夹导航：支持面包屑导航和侧边栏快速切换
 
 
+
+## 二次开发指南
+
+Telegraph-Image 项目采用模块化设计，支持灵活的二次开发和功能扩展。
+
+### 项目架构
+
+```
+Telegraph-Image/
+├── functions/              # Cloudflare Pages Functions
+│   ├── api/                # API 端点
+│   │   ├── manage/         # 图片管理 API
+│   │   └── finder/         # Finder 功能 API
+│   ├── file/               # 文件访问处理
+│   └── upload.js           # 图片上传处理
+├── finder/                 # Finder 文件管理界面
+│   ├── index.html          # 主界面文件
+│   ├── styles.css          # 样式文件
+│   └── middleware/         # 认证中间件
+└── admin.html              # 传统管理界面
+```
+
+### 核心功能模块
+
+#### 1. 文件夹管理系统
+- **位置**: `functions/api/manage/folders-enhanced.js`
+- **功能**: 提供文件夹的CRUD操作，支持多层级文件夹结构
+- **数据存储**: 使用Cloudflare KV存储文件夹元数据
+
+#### 2. 认证中间件
+- **位置**: `functions/finder/_middleware.js`
+- **功能**: Basic Authentication认证保护
+- **配置**: 支持环境变量配置用户名密码
+
+#### 3. 前端界面
+- **位置**: `finder/index.html`
+- **技术栈**: 原生JavaScript + CSS3
+- **特性**: 响应式设计、拖拽上传、实时预览
+
+### 开发环境设置
+
+#### 1. 本地开发
+```bash
+# 克隆项目
+git clone https://github.com/cf-pages/Telegraph-Image.git
+cd Telegraph-Image
+
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npx wrangler pages dev . --port 8788
+```
+
+#### 2. 环境变量配置
+创建 `wrangler.toml` 文件：
+```toml
+name = "telegraph-image"
+compatibility_date = "2023-12-01"
+
+[env.development.vars]
+FINDER_ENABLED = "true"
+FINDER_USER = "admin"
+FINDER_PASS = "your_password"
+TG_Bot_Token = "your_bot_token"
+TG_Chat_ID = "your_chat_id"
+
+[[env.development.kv_namespaces]]
+binding = "img_url"
+id = "your_kv_namespace_id"
+```
+
+### 自定义开发
+
+#### 1. 添加新的API端点
+在 `functions/api/` 目录下创建新的JavaScript文件：
+```javascript
+// functions/api/custom/example.js
+export async function onRequest(context) {
+    const { request, env } = context;
+
+    // 你的自定义逻辑
+    return new Response(JSON.stringify({
+        message: "Custom API endpoint"
+    }), {
+        headers: { "Content-Type": "application/json" }
+    });
+}
+```
+
+#### 2. 扩展Finder界面
+修改 `finder/index.html` 添加新功能：
+```javascript
+// 添加新的功能类
+class CustomFeature {
+    constructor() {
+        this.init();
+    }
+
+    init() {
+        // 初始化自定义功能
+    }
+}
+
+// 在主应用中集成
+window.customFeature = new CustomFeature();
+```
+
+#### 3. 自定义认证机制
+修改 `functions/finder/_middleware.js` 实现自定义认证：
+```javascript
+// 自定义认证函数
+function customAuthentication(context) {
+    // 实现你的认证逻辑
+    // 例如：JWT验证、OAuth集成等
+}
+
+export const onRequest = [errorHandling, customAuthentication];
+```
+
+### 部署与发布
+
+#### 1. 生产环境部署
+```bash
+# 构建项目
+npm run build
+
+# 部署到Cloudflare Pages
+npx wrangler pages deploy
+```
+
+#### 2. 环境变量设置
+在Cloudflare Pages控制台设置生产环境变量：
+- `FINDER_ENABLED=true`
+- `FINDER_USER=your_secure_username`
+- `FINDER_PASS=your_secure_password`
+- `TG_Bot_Token=your_telegram_bot_token`
+- `TG_Chat_ID=your_telegram_chat_id`
+
+### 常见开发场景
+
+#### 1. 添加新的文件类型支持
+修改 `functions/upload.js` 中的文件类型检查：
+```javascript
+const allowedTypes = /jpeg|jpg|png|gif|webp|svg|pdf|doc|docx|txt|mp4|avi|mov|your_new_type/;
+```
+
+#### 2. 自定义文件夹样式
+修改 `finder/styles.css` 添加新的样式：
+```css
+.custom-folder-style {
+    /* 你的自定义样式 */
+}
+```
+
+#### 3. 集成第三方服务
+在相应的API文件中添加第三方服务调用：
+```javascript
+// 例如：集成图片处理服务
+const processedImage = await thirdPartyService.process(imageData);
+```
+
+### 贡献指南
+
+1. **Fork项目** - 从主仓库fork一份代码
+2. **创建分支** - 为你的功能创建新分支
+3. **开发测试** - 在本地环境开发并测试
+4. **提交PR** - 提交Pull Request到主仓库
+
+### 技术支持
+
+- **文档**: 查看项目Wiki获取详细文档
+- **Issues**: 在GitHub Issues中报告问题或请求功能
+- **讨论**: 在GitHub Discussions中参与技术讨论
 
 ### 绑定自定义域名
 

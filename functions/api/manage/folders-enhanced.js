@@ -335,6 +335,7 @@ async function moveFilesToRoot(env, folderId) {
                 // 更新文件的父文件夹为root
                 const updatedMetadata = {
                     ...file.metadata,
+                    folderId: null,
                     parentFolder: 'root',
                     movedAt: new Date().toISOString()
                 };

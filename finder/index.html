@@ -665,6 +665,36 @@
                     });
                 });
 
+                // 系统文件夹导航
+                const systemNavItems = document.querySelectorAll('.nav-item[data-folder-type="system"]');
+                systemNavItems.forEach(item => {
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                        item.classList.add('active');
+
+                        const path = item.dataset.path || '/';
+                        let targetId = 'all';
+
+                        if (path.includes('recent')) {
+                            targetId = 'recent';
+                        } else if (path.includes('favorites')) {
+                            targetId = 'favorites';
+                        }
+
+                        this.currentFolderId = targetId;
+                        this.currentPath = targetId === 'all' ? '/' : `/${targetId}`;
+                        this.savePageState();
+
+                        this.loadImages(true).then(() => {
+                            this.renderImages();
+                            this.updateActiveNavigation();
+                        });
+
+                        this.updateBreadcrumb();
+                        this.updateActiveNavigation();
+                    });
+                });
+
                 // 文件输入
                 const fileInput = document.getElementById('fileInput');
                 if (fileInput) {
@@ -826,15 +856,21 @@
                 }
 
                 return filteredFiles
-                    .map(file => ({
-                        id: file.name,
-                        name: file.metadata?.fileName || file.name,
-                        size: file.metadata?.fileSize || 0,
-                        url: `/file/${file.name}`,
-                        uploadDate: new Date(file.metadata?.TimeStamp || Date.now()),
-                        folderId: file.metadata?.folderId || file.metadata?.parentFolder,
-                        liked: file.metadata?.liked || false
-                    }))
+                    .map(file => {
+                        const rawFolderId = file.metadata?.folderId ?? file.metadata?.parentFolder ?? null;
+                        const folderId = this.normalizeFolderId(rawFolderId);
+
+                        return {
+                            id: file.name,
+                            name: file.metadata?.fileName || file.name,
+                            size: file.metadata?.fileSize || 0,
+                            url: `/file/${file.name}`,
+                            uploadDate: new Date(file.metadata?.TimeStamp || Date.now()),
+                            folderId,
+                            rawFolderId,
+                            liked: file.metadata?.liked || false
+                        };
+                    })
                     .sort((a, b) => b.uploadDate - a.uploadDate);
             }
 
@@ -842,6 +878,30 @@
                 const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
                 const ext = filename.split('.').pop().toLowerCase();
                 return imageExtensions.includes(ext);
+            }
+
+            // 规范化文件夹ID，统一处理根目录标识
+            normalizeFolderId(folderId) {
+                if (folderId === undefined || folderId === null) {
+                    return null;
+                }
+
+                const normalized = String(folderId).trim();
+                if (normalized === '' || normalized === '/' || normalized === 'root' || normalized === 'all') {
+                    return null;
+                }
+
+                return normalized;
+            }
+
+            // 判断当前是否处于根目录视图
+            isRootView() {
+                return (
+                    !this.currentFolderId ||
+                    this.currentFolderId === 'all' ||
+                    this.currentFolderId === '/' ||
+                    this.currentPath === '/'
+                );
             }
 
             getDemoImages() {
@@ -944,18 +1004,18 @@
 
             // 获取当前文件夹的图片
             getCurrentFolderImages() {
-                if (this.currentFolderId === 'all' || this.currentPath === '/') {
-                    // 在根目录显示所有未分类的图片（没有folderId或folderId为null/undefined的图片）
+                if (this.isRootView()) {
+                    // 根目录展示所有未绑定文件夹的图片
                     return this.images.filter(image => !image.folderId || image.folderId === 'all');
-                } else {
-                    // 在特定文件夹内只显示属于该文件夹的图片
-                    return this.images.filter(image => image.folderId === this.currentFolderId);
                 }
+
+                // 在特定文件夹内只显示属于该文件夹的图片
+                return this.images.filter(image => image.folderId === this.currentFolderId);
             }
 
             // 获取当前文件夹的子文件夹
             getCurrentSubFolders() {
-                if (this.currentFolderId === 'all' || this.currentPath === '/') {
+                if (this.isRootView()) {
                     // 在根目录显示所有顶级文件夹
                     return Array.from(this.folders.values()).filter(folder =>
                         !folder.isSystem && (folder.parentFolder === 'root' || !folder.parentFolder)
@@ -976,6 +1036,12 @@
                     item.addEventListener('dblclick', () => {
                         const folderId = item.dataset.folderId;
                         this.navigateToFolder(folderId);
+                    });
+
+                    item.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        const folderId = item.dataset.folderId;
+                        this.showFolderContextMenu(e, folderId);
                     });
                 });
 
@@ -1063,15 +1129,18 @@
                 }
             }
 
-            showContextMenu(e, imageId) {
-                const image = this.images.find(img => img.id === imageId);
-                if (!image) return;
-
-                // 移除已存在的菜单
+            removeExistingContextMenu() {
                 const existingMenu = document.querySelector('.context-menu');
                 if (existingMenu) {
                     existingMenu.remove();
                 }
+            }
+
+            showContextMenu(e, imageId) {
+                const image = this.images.find(img => img.id === imageId);
+                if (!image) return;
+
+                this.removeExistingContextMenu();
 
                 // 创建新的菜单
                 const contextMenu = document.createElement('div');
@@ -1133,6 +1202,111 @@
                     case 'delete':
                         this.deleteImage(imageId);
                         break;
+                }
+            }
+
+            showFolderContextMenu(e, folderId) {
+                const folder = this.folders.get(folderId);
+                if (!folder || folder.isSystem) return;
+
+                this.removeExistingContextMenu();
+
+                const contextMenu = document.createElement('div');
+                contextMenu.className = 'context-menu';
+                contextMenu.id = 'folderContextMenu';
+
+                contextMenu.innerHTML = `
+                    <div class="context-menu-item" data-action="open">
+                        <i class="fas fa-folder-open"></i> 打开文件夹
+                    </div>
+                    <div class="context-menu-item danger" data-action="delete">
+                        <i class="fas fa-trash"></i> 删除文件夹
+                    </div>
+                `;
+
+                document.body.appendChild(contextMenu);
+
+                contextMenu.style.left = `${e.pageX}px`;
+                contextMenu.style.top = `${e.pageY}px`;
+                contextMenu.classList.add('show');
+
+                const rect = contextMenu.getBoundingClientRect();
+                if (rect.right > window.innerWidth) {
+                    contextMenu.style.left = `${e.pageX - rect.width}px`;
+                }
+                if (rect.bottom > window.innerHeight) {
+                    contextMenu.style.top = `${e.pageY - rect.height}px`;
+                }
+
+                contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const action = item.dataset.action;
+                        this.handleFolderContextMenuAction(action, folder);
+                        contextMenu.remove();
+                    });
+                });
+
+                setTimeout(() => {
+                    document.addEventListener('click', () => this.removeExistingContextMenu(), { once: true });
+                }, 0);
+            }
+
+            handleFolderContextMenuAction(action, folder) {
+                switch (action) {
+                    case 'open':
+                        this.navigateToFolder(folder.id);
+                        break;
+                    case 'delete':
+                        this.deleteFolder(folder);
+                        break;
+                }
+            }
+
+            async deleteFolder(folder) {
+                if (!folder || folder.isSystem) return;
+
+                const confirmMessage = `确定要删除文件夹 "${folder.name}" 吗？\n其中的图片将移动到根目录。`;
+                if (!confirm(confirmMessage)) {
+                    return;
+                }
+
+                try {
+                    this.showNotification(`正在删除文件夹 "${folder.name}"...`, 'info');
+
+                    const response = await fetch(`/api/manage/folders-enhanced?id=${encodeURIComponent(folder.id)}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || '删除失败');
+                    }
+
+                    // 从本地状态中移除文件夹，并清除缓存
+                    this.folders.delete(folder.id);
+                    localStorage.removeItem('telegraph_folders_cache');
+
+                    // 如果当前正在浏览被删除的文件夹，则退回根目录
+                    if (this.currentFolderId === folder.id) {
+                        this.currentFolderId = 'all';
+                        this.currentPath = '/';
+                    }
+
+                    this.savePageState();
+
+                    // 重新拉取文件夹和图片数据
+                    await this.loadFolders(true);
+                    await this.loadImages(true);
+
+                    this.renderSidebar();
+                    this.renderImages();
+                    this.updateBreadcrumb();
+                    this.updateActiveNavigation();
+
+                    this.showNotification(`文件夹 "${folder.name}" 已删除`, 'success');
+                } catch (error) {
+                    console.error('删除文件夹失败:', error);
+                    this.showNotification(`删除文件夹失败：${error.message}`, 'error');
                 }
             }
 
@@ -1457,8 +1631,15 @@
                         item.addEventListener('click', () => {
                             this.navigateToFolder(item.dataset.path);
                         });
+
+                        item.addEventListener('contextmenu', (e) => {
+                            e.preventDefault();
+                            this.showFolderContextMenu(e, item.dataset.path);
+                        });
                     });
                 }
+
+                this.updateActiveNavigation();
             }
 
             // 显示新建文件夹模态框
@@ -1538,18 +1719,12 @@
                 // 保存页面状态
                 this.savePageState();
 
-                // 更新侧边栏活动状态
-                document.querySelectorAll('.nav-item').forEach(item => {
-                    item.classList.remove('active');
-                });
-                const activeItem = document.querySelector(`[data-path="${folderId}"]`);
-                if (activeItem) {
-                    activeItem.classList.add('active');
-                }
+                this.updateActiveNavigation();
 
                 // 重新加载和渲染图片
                 this.loadImages(true).then(() => {
                     this.renderImages();
+                    this.updateActiveNavigation();
                 });
 
                 // 更新面包屑
@@ -1575,6 +1750,24 @@
                     }
                 }
                 breadcrumb.innerHTML = breadcrumbHtml;
+            }
+
+            updateActiveNavigation() {
+                const systemPathMap = {
+                    all: '/',
+                    recent: '/recent',
+                    favorites: '/favorites'
+                };
+
+                const expectedSystemPath = systemPathMap[this.currentFolderId] || '/';
+
+                document.querySelectorAll('.nav-item[data-folder-type="system"]').forEach(item => {
+                    item.classList.toggle('active', item.dataset.path === expectedSystemPath);
+                });
+
+                document.querySelectorAll('.nav-item[data-folder-type="custom"]').forEach(item => {
+                    item.classList.toggle('active', item.dataset.path === this.currentFolderId);
+                });
             }
 
             // 创建新文件夹
