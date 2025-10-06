@@ -471,7 +471,7 @@
                 // 恢复页面状态
                 this.restorePageState();
 
-                await this.loadFolders(); // 加载文件夹
+                await this.loadFolders(true); // 优先同步服务器端文件夹
                 await this.loadImages(true); // 首次加载强制刷新
                 this.renderImages();
                 this.renderSidebar(); // 渲染侧边栏
@@ -687,6 +687,7 @@
 
                         this.loadImages(true).then(() => {
                             this.renderImages();
+                            this.renderSidebar();
                             this.updateActiveNavigation();
                         });
 
@@ -731,6 +732,8 @@
                     localStorage.removeItem('telegraph_image_list');
                     localStorage.removeItem('finder_folders');
                     localStorage.removeItem('finder_folder_structure');
+                    localStorage.removeItem('telegraph_folders_cache');
+                    localStorage.removeItem('telegraph_page_state');
                     
                     // 清理所有以folder_开头的项
                     const keysToRemove = [];
@@ -776,6 +779,7 @@
                     if (response.ok) {
                         const data = await response.json();
                         this.images = this.filterImages(data);
+                        this.updateFolderCounts();
                         console.log(`✅ 加载了 ${this.images.length} 张图片`);
 
                         // 保存到本地存储，用于跨浏览器同步检测
@@ -786,6 +790,7 @@
                 } catch (error) {
                     console.log('🎭 API不可用，使用演示数据');
                     this.images = this.getDemoImages();
+                    this.updateFolderCounts();
                 }
             }
 
@@ -822,6 +827,7 @@
                         console.log('🔄 检测到图片列表变化，自动刷新...');
                         await this.loadImages(true);
                         this.renderImages();
+                        this.renderSidebar();
                     }
                 } catch (error) {
                     console.error('检查更新失败:', error);
@@ -1354,6 +1360,7 @@
                         // 强制从服务器重新加载图片列表
                         await this.loadImages(true);
                         this.renderImages();
+                        this.renderSidebar();
 
                         console.log('🔄 图片列表已刷新');
                     } else {
@@ -1460,6 +1467,7 @@
                         setTimeout(async () => {
                             await this.loadImages(true);
                             this.renderImages();
+                            this.renderSidebar();
                         }, 1000);
                         
                     } else {
@@ -1533,41 +1541,39 @@
 
             // 加载文件夹列表
             async loadFolders(forceRefresh = false) {
-                console.log('📁 加载文件夹列表...', forceRefresh ? '(强制刷新)' : '');
+                console.log('📁 加载文件夹列表...', forceRefresh ? '(强制刷新)' : '(实时同步)');
 
-                // 尝试从缓存加载
-                if (!forceRefresh) {
+                const fallbackToCache = () => {
                     const cachedFolders = this.loadFoldersFromCache();
                     if (cachedFolders && cachedFolders.length > 0) {
-                        this.folders.clear();
-                        cachedFolders.forEach(folder => {
-                            this.folders.set(folder.id, folder);
-                        });
-                        console.log(`✅ 从缓存加载了 ${cachedFolders.length} 个文件夹`);
-                        return;
+                        this.hydrateFolders(cachedFolders);
+                        console.log(`✅ 从缓存恢复 ${cachedFolders.length} 个文件夹`);
+                        return true;
                     }
-                }
+                    return false;
+                };
+
+                const cacheBuster = `?t=${Date.now()}`;
 
                 try {
-                    const timestamp = forceRefresh ? `?t=${Date.now()}` : '';
-                    const response = await fetch(`/api/manage/folders-enhanced${timestamp}`);
-                    if (response.ok) {
-                        const folders = await response.json();
-                        this.folders.clear();
-                        folders.forEach(folder => {
-                            this.folders.set(folder.id, folder);
-                        });
+                    const response = await fetch(`/api/manage/folders-enhanced${cacheBuster}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
 
-                        // 保存到缓存
-                        this.saveFoldersToCache(folders);
-                        console.log(`✅ 加载了 ${folders.length} 个文件夹`);
-                    } else {
+                    const folders = await response.json();
+                    const normalizedFolders = Array.isArray(folders) ? folders : [];
+
+                    this.hydrateFolders(normalizedFolders);
+                    this.saveFoldersToCache(normalizedFolders);
+                    console.log(`✅ 同步 ${normalizedFolders.length} 个文件夹`);
+                } catch (error) {
+                    console.error('📁 获取服务器文件夹失败:', error);
+
+                    if (!fallbackToCache()) {
                         console.log('📁 使用默认文件夹');
                         this.initDefaultFolders();
                     }
-                } catch (error) {
-                    console.log('📁 API不可用，使用默认文件夹');
-                    this.initDefaultFolders();
                 }
             }
 
@@ -1600,12 +1606,54 @@
                 }
             }
 
+            // 构建系统文件夹基础数据
+            prepareSystemFolders() {
+                this.folders.clear();
+
+                const systemFolders = [
+                    { id: 'all', name: '全部图片', icon: 'fas fa-images', isSystem: true },
+                    { id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true },
+                    { id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true }
+                ];
+
+                systemFolders.forEach(folder => {
+                    this.folders.set(folder.id, {
+                        fileCount: 0,
+                        ...folder
+                    });
+                });
+            }
+
+            hydrateFolders(folders = []) {
+                this.prepareSystemFolders();
+
+                folders.forEach(folder => {
+                    if (!folder || !folder.id) return;
+
+                    if (folder.isSystem && this.folders.has(folder.id)) {
+                        this.folders.set(folder.id, {
+                            ...this.folders.get(folder.id),
+                            ...folder,
+                            fileCount: folder.fileCount ?? this.folders.get(folder.id).fileCount ?? 0
+                        });
+                    } else {
+                        this.folders.set(folder.id, {
+                            fileCount: folder.fileCount ?? 0,
+                            ...folder,
+                            isSystem: Boolean(folder.isSystem)
+                        });
+                    }
+                });
+
+                this.updateFolderCounts();
+                this.updateActiveNavigation();
+            }
+
             // 初始化默认文件夹
             initDefaultFolders() {
-                this.folders.clear();
-                this.folders.set('all', { id: 'all', name: '全部图片', icon: 'fas fa-images', isSystem: true });
-                this.folders.set('recent', { id: 'recent', name: '最近使用', icon: 'fas fa-clock', isSystem: true });
-                this.folders.set('favorites', { id: 'favorites', name: '收藏夹', icon: 'fas fa-star', isSystem: true });
+                this.prepareSystemFolders();
+                this.updateFolderCounts();
+                this.updateActiveNavigation();
             }
 
             // 渲染侧边栏
@@ -1724,6 +1772,7 @@
                 // 重新加载和渲染图片
                 this.loadImages(true).then(() => {
                     this.renderImages();
+                    this.renderSidebar();
                     this.updateActiveNavigation();
                 });
 
@@ -1767,6 +1816,60 @@
 
                 document.querySelectorAll('.nav-item[data-folder-type="custom"]').forEach(item => {
                     item.classList.toggle('active', item.dataset.path === this.currentFolderId);
+                });
+            }
+
+            updateFolderCounts() {
+                if (!(this.folders instanceof Map)) {
+                    this.folders = new Map();
+                }
+
+                if (this.folders.size === 0) {
+                    this.prepareSystemFolders();
+                }
+
+                const images = Array.isArray(this.images) ? this.images : [];
+                const folderCounts = new Map();
+                const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+                let recentCount = 0;
+                let favoritesCount = 0;
+
+                images.forEach(image => {
+                    const uploadTime = image.uploadDate instanceof Date
+                        ? image.uploadDate.getTime()
+                        : Number(image.uploadDate) || 0;
+
+                    if (uploadTime && uploadTime > weekAgo) {
+                        recentCount++;
+                    }
+
+                    if (image.liked) {
+                        favoritesCount++;
+                    }
+
+                    const folderKey = image.folderId || 'root';
+                    folderCounts.set(folderKey, (folderCounts.get(folderKey) || 0) + 1);
+                });
+
+                const allFolder = this.folders.get('all');
+                if (allFolder) {
+                    allFolder.fileCount = images.length;
+                }
+
+                const recentFolder = this.folders.get('recent');
+                if (recentFolder) {
+                    recentFolder.fileCount = recentCount;
+                }
+
+                const favoritesFolder = this.folders.get('favorites');
+                if (favoritesFolder) {
+                    favoritesFolder.fileCount = favoritesCount;
+                }
+
+                this.folders.forEach(folder => {
+                    if (folder.isSystem) return;
+                    folder.fileCount = folderCounts.get(folder.id) || 0;
                 });
             }
 
